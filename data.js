@@ -9,14 +9,15 @@
   const GOAL = 6371000; // 地球の中心（m）
 
   // 地層。from: 始まる深さ(m) / hard: かたさ（掘る力をこれで割る） / value: 1m あたりのお金 / wall: 入るのに要る道具
+  // grow: 地層の中でも深くなるほどかたくなる度合い（かたさ = hard × (深さ ÷ from)^grow）。地層の境目で柔らかくならないようにしてある
   const LAYERS = [
-    { id: "soil", name: "土の層", icon: "🌱", from: 0, hard: 1, value: 1 },
-    { id: "rock", name: "岩盤の層", icon: "🪨", from: 100, hard: 4, value: 5 },
-    { id: "fossil", name: "化石の層", icon: "🦴", from: 2000, hard: 12, value: 30 },
-    { id: "crust", name: "地殻の底", icon: "🧱", from: 12000, hard: 40, value: 150 },
-    { id: "mantle", name: "マントル", icon: "🔥", from: 35000, hard: 150, value: 1000, wall: "suit" },
-    { id: "outer", name: "外核", icon: "🌀", from: 2900000, hard: 800, value: 8000, wall: "drill" },
-    { id: "inner", name: "内核", icon: "💎", from: 5150000, hard: 2500, value: 50000, wall: "starpick" },
+    { id: "soil", name: "土の層", icon: "🌱", from: 0, hard: 0.55, value: 1, grow: 0 },
+    { id: "rock", name: "岩盤の層", icon: "🪨", from: 100, hard: 2.2, value: 5, grow: 0.5 },
+    { id: "fossil", name: "化石の層", icon: "🦴", from: 2000, hard: 11, value: 40, grow: 0.5 },
+    { id: "crust", name: "地殻の底", icon: "🧱", from: 12000, hard: 27.5, value: 150, grow: 0.5 },
+    { id: "mantle", name: "マントル", icon: "🔥", from: 35000, hard: 165, value: 750, grow: 0.5, wall: "suit" },
+    { id: "outer", name: "外核", icon: "🌀", from: 2900000, hard: 1650, value: 16000, grow: 0.5, wall: "drill" },
+    { id: "inner", name: "内核", icon: "💎", from: 5150000, hard: 2475, value: 36000, grow: 0.5, wall: "starpick" },
   ];
 
   // 仲間・機械。cost: 1台目の値段 / out: 1台の掘る力（毎秒） / layer: 買えるようになる地層 / node: スキルツリーで解放
@@ -69,8 +70,8 @@
     { id: "o5", branch: "treasure", name: "虹の鉱石", icon: "🌈", cost: 60, desc: "光る鉱石がときどき虹色に（10秒間 ×77）" },
     { id: "o6", branch: "treasure", name: "かけら増量", icon: "✦", cost: 150, desc: "転生でもらえる星のかけら ×1.25" },
     { id: "suit", branch: "tool", name: "耐熱スーツ", icon: "🧯", cost: 25, desc: "マントルの壁を越えられる" },
-    { id: "drill", branch: "tool", name: "超高圧ドリル", icon: "🌀", cost: 250, desc: "外核の壁を越えられる" },
-    { id: "starpick", branch: "tool", name: "星のつるはし", icon: "⭐", cost: 900, desc: "内核の壁を越えられる" },
+    { id: "drill", branch: "tool", name: "超高圧ドリル", icon: "🌀", cost: 400, desc: "外核の壁を越えられる" },
+    { id: "starpick", branch: "tool", name: "星のつるはし", icon: "⭐", cost: 1300, desc: "内核の壁を越えられる" },
   ];
   // 枝の中は根元から順番
   for (const br of ["tap", "friend", "treasure", "tool"]) {
@@ -103,10 +104,10 @@
   const MILESTONES = [10, 100, 1000, 2000, 10000, 12000, 35000, 100000, 1000000, 2900000, 5150000, 6371000];
 
   // 光る鉱石
-  const ORE = { minGap: 90, maxGap: 150, show: 12, mult: 7, dur: 30, rainbowChance: 0.1, rainbowMult: 77, rainbowDur: 10 };
+  const ORE = { minGap: 120, maxGap: 240, show: 12, mult: 7, dur: 15, rainbowChance: 0.1, rainbowMult: 77, rainbowDur: 10 };
 
   // 転生でもらえる星のかけら = floor(√(最高の深さ ÷ SHARD_DIV))
-  const SHARD_DIV = 50;
+  const SHARD_DIV = 35;
 
   return { GOAL, LAYERS, BUILDINGS, COST_GROWTH, UPGRADES, TREE, FOSSILS, FOSSIL_BONUS, MILESTONES, ORE, SHARD_DIV };
 });

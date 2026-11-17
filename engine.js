@@ -95,10 +95,33 @@
   }
   // 今の地層で、毎秒何 m 掘れるか（表示用）
   function autoSpeed(game) {
-    return autoPower(game) / layerOf(game).hard;
+    return autoPower(game) / hardAt(layerOf(game), game.life.depth);
+  }
+  function hardNow(game) {
+    return hardAt(layerOf(game), game.life.depth);
   }
 
   // ---- 掘る ----
+  // 地層の中では、深くなるほどかたくなる：かたさ = hard × (深さ ÷ その地層の始まり)^grow
+  // お金は掘った m × value。深くなるほど 1m が重くなるので、稼ぎの伸びもゆっくりになる（そこで転生）
+  function hardAt(layer, d) {
+    return layer.grow ? layer.hard * Math.pow(Math.max(1, d / layer.from), layer.grow) : layer.hard;
+  }
+  // 地層 li の中で a から b まで掘るのに要る力
+  function powerBetween(li, a, b) {
+    const l = D.LAYERS[li], g = l.grow || 0;
+    if (!g) return l.hard * (b - a);
+    const k = l.hard / (Math.pow(l.from, g) * (g + 1));
+    return k * (Math.pow(b, g + 1) - Math.pow(a, g + 1));
+  }
+  // 地層 li の中で a から力 p で掘ったときの到達点
+  function reachWith(li, a, p) {
+    const l = D.LAYERS[li], g = l.grow || 0;
+    if (!g) return a + p / l.hard;
+    const k = l.hard / (Math.pow(l.from, g) * (g + 1));
+    return Math.pow(Math.pow(a, g + 1) + p / k, 1 / (g + 1));
+  }
+
   // power（かたさで割る前の量）だけ掘る。地層の境目ではかたさが変わる。壁は道具がないと越えられない。
   function dig(game, power) {
     const L = game.life;
@@ -108,14 +131,14 @@
       const layer = D.LAYERS[L.layer];
       const next = D.LAYERS[L.layer + 1];
       const end = next ? next.from : D.GOAL;
-      const room = end - L.depth;
-      const m = rem / layer.hard;
-      if (m < room) {
-        L.depth += m; L.money += m * layer.value; dug += m;
+      const need = powerBetween(L.layer, L.depth, end);
+      if (rem < need) {
+        const to = Math.min(end, reachWith(L.layer, L.depth, rem));
+        dug += to - L.depth; L.money += (to - L.depth) * layer.value; L.depth = to;
         break;
       }
-      L.depth = end; L.money += room * layer.value; dug += room;
-      rem -= room * layer.hard;
+      dug += end - L.depth; L.money += (end - L.depth) * layer.value; L.depth = end;
+      rem -= need;
       if (!next) break; // 地球の中心
       if (next.wall && !has(game, next.wall)) {
         if (!L.atWall) events.push({ type: "wall", tool: next.wall });
@@ -126,7 +149,7 @@
       L.atWall = false;
       const ev = { type: "layer", id: next.id };
       if (has(game, "o4")) {
-        ev.bonus = autoRaw(game) / next.hard * next.value * 30 + next.value * 50;
+        ev.bonus = (autoRaw(game) / next.hard) * next.value * 30 + next.value * 50;
         L.money += ev.bonus;
       }
       events.push(ev);
@@ -309,7 +332,7 @@
   }
 
   return {
-    newGame, layerOf, tapPower, autoPower, autoSpeed, buildingPower, fossilMult, dig, tap, tick, tapOre,
+    newGame, layerOf, tapPower, autoPower, autoSpeed, hardNow, hardAt, powerBetween, buildingPower, fossilMult, dig, tap, tick, tapOre,
     isUnlocked, buildingCost, buy, canBuyUpgrade, buyUpgrade, canUnlock, unlockNode, wallTool,
     rebirthShards, rebirth, fmtNum, fmtDepth, rand,
   };

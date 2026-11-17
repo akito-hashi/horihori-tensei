@@ -53,18 +53,29 @@ test("地層の境目をまたぐと、その先は新しい地層のかたさ�
   const g = fresh();
   const rock = D.LAYERS[1];
   g.life.depth = rock.from - 1; // 境目の 1m 手前
-  g.life.owned[D.BUILDINGS[0].id] = 1;
-  const power = 1 * D.LAYERS[0].hard + 10 * rock.hard; // 土を 1m、岩盤を 10m 掘れる力
+  const power = E.powerBetween(0, rock.from - 1, rock.from) + E.powerBetween(1, rock.from, rock.from + 10); // 土を 1m、岩盤を 10m 掘れる力
   E.dig(g, power);
   assert.ok(Math.abs(g.life.depth - (rock.from + 10)) < 1e-6, String(g.life.depth));
   assert.equal(E.layerOf(g).id, "rock");
 });
 
-test("地層には順番があり、深いほどかたく、お金も多い。壁のある地層には道具が決まっている", () => {
+test("地層の中でも、深くなるほどかたくなる（同じ力でも進みが遅くなる）", () => {
+  const g = fresh();
+  const rock = D.LAYERS[1];
+  g.life.layer = 1; g.life.depth = rock.from;
+  const first = E.dig(g, 1000).dug;
+  g.life.depth = 1500;
+  const later = E.dig(g, 1000).dug;
+  assert.ok(later < first * 0.5, `${first} ${later}`);
+  assert.ok(E.hardNow(g) > rock.hard);
+});
+
+test("地層には順番があり、深いほどかたく、お金も多い。境目で柔らかくならない", () => {
   for (let i = 1; i < D.LAYERS.length; i++) {
-    assert.ok(D.LAYERS[i].from > D.LAYERS[i - 1].from);
-    assert.ok(D.LAYERS[i].hard > D.LAYERS[i - 1].hard);
-    assert.ok(D.LAYERS[i].value > D.LAYERS[i - 1].value);
+    const a = D.LAYERS[i - 1], b = D.LAYERS[i];
+    assert.ok(b.from > a.from);
+    assert.ok(b.value > a.value);
+    assert.ok(b.hard >= E.hardAt(a, b.from), `${a.id}→${b.id}`);
   }
   assert.deepEqual(D.LAYERS.filter((l) => l.wall).map((l) => l.id), ["mantle", "outer", "inner"]);
   assert.equal(D.GOAL, 6371000);

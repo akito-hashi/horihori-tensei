@@ -110,9 +110,10 @@ test("会心の一撃：開放するとタップの約 10回に 1回が 10倍。
   const p = E.tapPower(g);
   for (let i = 0; i < 2000; i++) {
     g.life.taps = [];
+    g.life.depth = 0; g.life.layer = 0; // 同じ地層の中で比べる
     const before = g.life.depth;
     const r = E.tap(g);
-    if (r.crit) { crits++; assert.ok(Math.abs((g.life.depth - before) - 10 * p / E.layerOf(g).hard) < 1e-6); }
+    if (r.crit) { crits++; assert.ok(Math.abs((g.life.depth - before) - 10 * p / E.hardNow(g)) < 1e-6); }
   }
   assert.ok(crits > 140 && crits < 260, String(crits));
 });
@@ -120,11 +121,11 @@ test("会心の一撃：開放するとタップの約 10回に 1回が 10倍。
 test("連打ボーナス：1秒に 5回以上タップすると、その間は 1.5倍", () => {
   const g = fresh();
   grant(g, "t2");
-  const p = E.tapPower(g);
+  const m = E.tapPower(g) / D.LAYERS[0].hard; // 土の層で 1回に掘れる m
   const gains = [];
   for (let i = 0; i < 6; i++) { gains.push(E.tap(g).gain); E.tick(g, 0.1); }
-  assert.ok(Math.abs(gains[0] - p) < 1e-9);
-  assert.ok(Math.abs(gains[4] - p * 1.5) < 1e-9, "5回目から");
+  assert.ok(Math.abs(gains[0] - m) < 1e-9);
+  assert.ok(Math.abs(gains[4] - m * 1.5) < 1e-9, "5回目から");
   assert.equal(E.tap(g).combo, true);
   const h = fresh();
   grant(h, "t2");
@@ -141,24 +142,24 @@ function countOres(g, seconds, tapIt = false) {
   return n;
 }
 
-test("光る鉱石はときどき出て、12秒で消える。タップすると 30秒間すべて 7倍", () => {
+test(`光る鉱石はときどき出て、${D.ORE.show}秒で消える。タップすると ${D.ORE.dur}秒間すべて ${D.ORE.mult}倍`, () => {
   const g = fresh(5);
   let t0 = null;
-  for (let s = 0; s < 200 && !g.life.ore.shown; s += 0.5) E.tick(g, 0.5);
-  assert.ok(g.life.ore.shown, "200秒以内に出る");
+  for (let s = 0; s < D.ORE.maxGap + 1 && !g.life.ore.shown; s += 0.5) E.tick(g, 0.5);
+  assert.ok(g.life.ore.shown, `${D.ORE.maxGap}秒以内に出る`);
   t0 = g.life.t;
   const keep = clone(g);
-  for (let s = 0; s < 13; s += 0.5) E.tick(g, 0.5);
-  assert.equal(g.life.ore.shown, false, "12秒で消える");
+  for (let s = 0; s < D.ORE.show + 1; s += 0.5) E.tick(g, 0.5);
+  assert.equal(g.life.ore.shown, false, "時間がたつと消える");
   const h = keep;
   h.life.owned.apprentice = 10;
   const tapBase = E.tapPower(h), autoBase = E.autoPower(h);
   const r = E.tapOre(h);
-  assert.equal(r.mult, 7);
-  assert.equal(E.tapPower(h), tapBase * 7);
-  assert.equal(E.autoPower(h), autoBase * 7);
-  for (let s = 0; s < 31; s += 0.5) E.tick(h, 0.5);
-  assert.equal(E.autoPower(h), autoBase, "30秒で終わる");
+  assert.equal(r.mult, D.ORE.mult);
+  assert.equal(E.tapPower(h), tapBase * D.ORE.mult);
+  assert.equal(E.autoPower(h), autoBase * D.ORE.mult);
+  for (let s = 0; s < D.ORE.dur + 1; s += 0.5) E.tick(h, 0.5);
+  assert.equal(E.autoPower(h), autoBase, "決まった時間で終わる");
   assert.equal(E.tapOre(h), null, "出ていないときはタップできない");
 });
 
@@ -171,12 +172,12 @@ test("『光る鉱石』を開放すると約 2倍、強力ライトで約 1.5�
   assert.ok(nc / na > 1.25 && nc / na < 1.8, `${na} ${nc}`);
 });
 
-test("『長持ち』でブーストが 45秒。『虹の鉱石』を開放したときだけ、虹色（10秒間 77倍）が出る", () => {
+test("『長持ち』でブーストが 1.5倍長い。『虹の鉱石』を開放したときだけ、虹色（10秒間 77倍）が出る", () => {
   const g = fresh(2);
   grant(g, "o2");
   while (!g.life.ore.shown) E.tick(g, 0.5);
   E.tapOre(g);
-  assert.ok(Math.abs(g.life.boost.until - g.life.t - 45) < 1e-9);
+  assert.ok(Math.abs(g.life.boost.until - g.life.t - D.ORE.dur * 1.5) < 1e-9);
   let rainbows = 0;
   const h = fresh(4);
   for (let i = 0; i < 300; i++) { while (!h.life.ore.shown) E.tick(h, 1); if (h.life.ore.kind === "rainbow") rainbows++; E.tapOre(h); }
@@ -186,7 +187,7 @@ test("『長持ち』でブーストが 45秒。『虹の鉱石』を開放し�
     while (!h.life.ore.shown) E.tick(h, 1);
     const kind = h.life.ore.kind;
     const r = E.tapOre(h);
-    if (kind === "rainbow") { rainbows++; assert.equal(r.mult, 77); assert.ok(Math.abs(h.life.boost.until - h.life.t - 10) < 1e-9); }
+    if (kind === "rainbow") { rainbows++; assert.equal(r.mult, D.ORE.rainbowMult); assert.ok(Math.abs(h.life.boost.until - h.life.t - D.ORE.rainbowDur) < 1e-9); }
   }
   assert.ok(rainbows > 10 && rainbows < 60, String(rainbows));
 });
@@ -196,13 +197,14 @@ test("『化石図鑑』を開放すると、決まった深さを通ったと�
   assert.equal(D.FOSSILS.length, 16);
   const g = fresh();
   const f = D.FOSSILS[0];
-  E.dig(g, f.depth * 2);
+  const past = E.powerBetween(0, 0, f.depth + 5); // 1つ目の化石だけを通りすぎる力
+  E.dig(g, past);
   assert.equal(Object.keys(g.fossils).length, 0, "開放前は見つからない");
   const h = fresh();
   grant(h, "o3");
   h.life.owned.apprentice = 10;
   const before = E.autoPower(h);
-  const r = E.dig(h, f.depth * 2);
+  const r = E.dig(h, past);
   assert.ok(r.events.some((e) => e.type === "fossil" && e.id === f.id));
   assert.ok(h.fossils[f.id]);
   assert.ok(Math.abs(E.autoPower(h) - before * 1.02) < 1e-9);
@@ -233,7 +235,7 @@ test("転生すると深さに応じて星のかけらがもらえ、人生が�
   g.life.money = 999; g.life.owned.apprentice = 5; g.life.upgrades.pick_iron = true;
   grant(g, "t1");
   const s = E.rebirthShards(g);
-  assert.equal(s, Math.floor(Math.sqrt(35000 / 50)));
+  assert.equal(s, Math.floor(Math.sqrt(35000 / D.SHARD_DIV)));
   const r = E.rebirth(g);
   assert.equal(r.shards, s);
   assert.equal(g.shards, s);
@@ -252,13 +254,13 @@ test("『かけら増量』で転生のかけらが 1.25倍", () => {
   g.life.depth = 100000;
   const s = E.rebirthShards(g);
   grant(g, "o6");
-  assert.equal(E.rebirthShards(g), Math.floor(Math.sqrt(100000 / 50) * 1.25));
+  assert.equal(E.rebirthShards(g), Math.floor(Math.sqrt(100000 / D.SHARD_DIV) * 1.25));
   assert.ok(E.rebirthShards(g) > s);
 });
 
 test("節目の深さに着いた時間が記録され、転生後は前世の時間と比べられる", () => {
   const g = fresh();
-  g.life.owned.mole = 50;
+  g.life.owned.mole = 5;
   let first = null;
   for (let i = 0; i < 2000 && !first; i++) {
     const ev = E.tick(g, 0.5);
