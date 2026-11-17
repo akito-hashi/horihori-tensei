@@ -312,6 +312,36 @@
     return { shards: s };
   }
 
+  // ---- セーブの点検 ----
+  // 読みこんだセーブを点検する。遊べない形なら false。知らないもの・おかしな数は取りのぞく
+  function sanitize(game) {
+    try {
+      const num = (x) => typeof x === "number" && isFinite(x);
+      if (!game || game.v !== 1 || !game.life || typeof game.life !== "object") return false;
+      const L = game.life;
+      if (!num(L.depth) || L.depth < 0 || !num(L.money) || !num(L.t) || !Number.isInteger(L.layer) || !D.LAYERS[L.layer]) return false;
+      if (!num(game.shards) || game.shards < 0 || !num(game.rng) || !Number.isInteger(game.lifeNo)) return false;
+      const keep = (obj, ok) => Object.fromEntries(Object.entries(obj && typeof obj === "object" ? obj : {}).filter(([k, v]) => ok(k, v)));
+      L.owned = keep(L.owned, (k, v) => BUILDING[k] && Number.isInteger(v) && v > 0);
+      L.upgrades = keep(L.upgrades, (k, v) => UPGRADE[k] && v === true);
+      game.tree = keep(game.tree, (k, v) => NODE[k] && v === true);
+      game.fossils = keep(game.fossils, (k) => D.FOSSILS.some((f) => f.id === k));
+      game.prevReach = keep(game.prevReach, (k, v) => num(v));
+      L.reach = keep(L.reach, (k, v) => num(v));
+      L.taps = Array.isArray(L.taps) ? L.taps.filter(num) : [];
+      if (!Array.isArray(game.lives)) game.lives = [];
+      if (!Array.isArray(game.clears)) game.clears = [];
+      if (!num(game.totalTime)) game.totalTime = 0;
+      game.cleared = !!game.cleared;
+      L.atWall = !!L.atWall; L.cleared = !!L.cleared;
+      if (!L.boost || !num(L.boost.mult) || !num(L.boost.until)) L.boost = null;
+      if (!L.ore || !num(L.ore.next)) scheduleOre(game);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   // ---- 表示用の数字 ----
   const UNITS = [[1e32, "溝"], [1e28, "穣"], [1e24, "𥝱"], [1e20, "垓"], [1e16, "京"], [1e12, "兆"], [1e8, "億"], [1e4, "万"]];
   const commas = (n) => String(Math.floor(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
@@ -324,6 +354,8 @@
     return (Math.floor(v * 10) / 10).toFixed(1).replace(/\.0$/, "") + name;
   }
   function fmtDepth(m) {
+    if (m <= 0) return "0 m";
+    if (m < 1) return Math.max(1, Math.round(m * 100)) + " cm";
     if (m < 10) return m.toFixed(1) + " m";
     if (m < 1000) return commas(m) + " m";
     const km = m / 1000;
@@ -334,6 +366,6 @@
   return {
     newGame, layerOf, tapPower, autoPower, autoSpeed, hardNow, hardAt, powerBetween, buildingPower, fossilMult, dig, tap, tick, tapOre,
     isUnlocked, buildingCost, buy, canBuyUpgrade, buyUpgrade, canUnlock, unlockNode, wallTool,
-    rebirthShards, rebirth, fmtNum, fmtDepth, rand,
+    rebirthShards, rebirth, sanitize, fmtNum, fmtDepth, rand,
   };
 });

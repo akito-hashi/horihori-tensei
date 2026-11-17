@@ -295,3 +295,27 @@ test("地球の中心に着くとクリア（合計の時間が記録される�
   assert.ok(g.clears[0].totalTime > 0);
   assert.equal(E.tick(g, 1).filter((e) => e.type === "clear").length, 0, "クリアは 1回だけ知らせる");
 });
+
+// ---- セーブの点検 ----
+test("こわれた・古いセーブを読みこむときは、知らないものを取りのぞき、遊べない形なら false", () => {
+  const g = fresh();
+  g.life.owned.apprentice = 3; g.life.owned.nazo = 9;
+  g.life.upgrades.pick_iron = true; g.life.upgrades.nazo = true;
+  g.tree.t1 = true; g.tree.nazo = true;
+  g.fossils.acorn = { lifeNo: 1, depth: 30 }; g.fossils.nazo = {};
+  delete g.life.ore;
+  assert.equal(E.sanitize(g), true);
+  assert.deepEqual(g.life.owned, { apprentice: 3 });
+  assert.deepEqual(Object.keys(g.life.upgrades), ["pick_iron"]);
+  assert.deepEqual(Object.keys(g.tree), ["t1"]);
+  assert.deepEqual(Object.keys(g.fossils), ["acorn"]);
+  assert.ok(g.life.ore && g.life.ore.next > 0);
+  for (const bad of [null, {}, { v: 2 }, { ...clone(g), life: null }]) assert.equal(E.sanitize(bad), false);
+  const nan = clone(g); nan.life.depth = "abc";
+  assert.equal(E.sanitize(nan), false);
+  const deep = clone(g); deep.life.layer = 99;
+  assert.equal(E.sanitize(deep), false);
+  const neg = clone(g); neg.life.owned.apprentice = -5;
+  assert.equal(E.sanitize(neg), true);
+  assert.equal(neg.life.owned.apprentice, undefined);
+});
