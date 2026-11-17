@@ -1,0 +1,9 @@
+{
+  "name": "horihori-tensei",
+  "private": true,
+  "scripts": {
+    "test": "node --test --test-timeout=60000 tests/",
+    "test:ui": "node --test --test-concurrency=1 --test-timeout=60000 tests-ui/"
+  },
+  "devDependencies": { "puppeteer-core": "24.43.1" }
+}
