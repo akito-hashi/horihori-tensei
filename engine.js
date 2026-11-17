@@ -18,26 +18,46 @@
 
   const BUILDING = Object.fromEntries(D.BUILDINGS.map((b) => [b.id, b]));
   const UPGRADE = Object.fromEntries(D.UPGRADES.map((u) => [u.id, u]));
+  const NODE = Object.fromEntries(D.TREE.map((n) => [n.id, n]));
   const LAYER_INDEX = Object.fromEntries(D.LAYERS.map((l, i) => [l.id, i]));
+  const has = (game, id) => !!(game.tree && game.tree[id]);
 
-  function newLife() {
-    return { depth: 0, layer: 0, money: 0, t: 0, owned: {}, upgrades: {}, taps: [], reach: {}, atWall: false };
+  function newLife(game) {
+    const L = { depth: 0, layer: 0, money: 0, t: 0, owned: {}, upgrades: {}, taps: [], reach: {}, atWall: false, cleared: false, boost: null, ore: null };
+    game.life = L;
+    scheduleOre(game);
+    return L;
   }
 
   function newGame({ seed } = {}) {
-    return {
+    const game = {
       v: 1,
       rng: (seed == null ? Math.floor(Math.random() * 2 ** 32) : seed) >>> 0,
       lifeNo: 1,
       shards: 0,
       tree: {},
-      life: newLife(),
+      fossils: {},
+      prevReach: {},
+      lives: [],
+      clears: [],
+      cleared: false,
+      totalTime: 0,
+      life: null,
     };
+    newLife(game);
+    return game;
   }
 
   const layerOf = (game) => D.LAYERS[game.life.layer];
 
   // ---- 力の計算 ----
+  function fossilMult(game) {
+    return 1 + D.FOSSIL_BONUS * Object.keys(game.fossils || {}).length;
+  }
+  function boostMult(game) {
+    const b = game.life.boost;
+    return b && game.life.t < b.until ? b.mult : 1;
+  }
   function pickMult(game) {
     let m = 1;
     for (const u of D.UPGRADES) if (u.kind === "pick" && game.life.upgrades[u.id]) m *= u.mult;
@@ -50,17 +70,32 @@
     let p = n * b.out;
     const eq = UPGRADE["eq_" + id];
     if (eq && game.life.upgrades[eq.id]) p *= eq.mult;
+    if (has(game, "f3")) p *= Math.pow(2, Math.floor(n / 25));
     return p;
   }
-  // 仲間・機械が毎秒掘る力（かたさで割る前）
-  function autoPower(game) {
+  // 仲間・機械が毎秒掘る力（かたさで割る前・ブーストなし）
+  function autoRaw(game) {
     let p = 0;
     for (const b of D.BUILDINGS) p += buildingPower(game, b.id);
-    return p;
+    if (has(game, "f1")) p *= 1.5;
+    if (has(game, "f4")) p *= 2;
+    return p * fossilMult(game);
   }
-  // タップ 1回の掘る力（かたさで割る前）
+  function autoPower(game) {
+    return autoRaw(game) * boostMult(game);
+  }
+  // タップ 1回の掘る力（かたさで割る前。連打・会心は含まない）
   function tapPower(game) {
-    return 1 * pickMult(game);
+    let p = pickMult(game);
+    if (has(game, "t1")) p *= 2;
+    if (has(game, "t5")) p *= 5;
+    p *= fossilMult(game);
+    if (has(game, "t4")) p += 0.05 * autoRaw(game);
+    return p * boostMult(game);
+  }
+  // 今の地層で、毎秒何 m 掘れるか（表示用）
+  function autoSpeed(game) {
+    return autoPower(game) / layerOf(game).hard;
   }
 
   // ---- 掘る ----
@@ -69,7 +104,7 @@
     const L = game.life;
     let rem = power, dug = 0;
     const events = [];
-    while (rem > 0) {
+    while (rem > 0 && !L.cleared) {
       const layer = D.LAYERS[L.layer];
       const next = D.LAYERS[L.layer + 1];
       const end = next ? next.from : D.GOAL;
@@ -77,48 +112,119 @@
       const m = rem / layer.hard;
       if (m < room) {
         L.depth += m; L.money += m * layer.value; dug += m;
-        rem = 0;
         break;
       }
       L.depth = end; L.money += room * layer.value; dug += room;
       rem -= room * layer.hard;
       if (!next) break; // 地球の中心
-      if (next.wall && !hasTool(game, next.wall)) { L.atWall = true; break; }
+      if (next.wall && !has(game, next.wall)) {
+        if (!L.atWall) events.push({ type: "wall", tool: next.wall });
+        L.atWall = true;
+        break;
+      }
       L.layer += 1;
       L.atWall = false;
-      events.push({ type: "layer", id: next.id });
+      const ev = { type: "layer", id: next.id };
+      if (has(game, "o4")) {
+        ev.bonus = autoRaw(game) / next.hard * next.value * 30 + next.value * 50;
+        L.money += ev.bonus;
+      }
+      events.push(ev);
     }
+    afterDig(game, events);
     return { dug, events };
   }
 
-  function hasTool(game, id) {
-    return !!(game.tree && game.tree[id]);
+  function afterDig(game, events) {
+    const L = game.life;
+    for (const d of D.MILESTONES) {
+      if (d <= L.depth && L.reach[d] == null) {
+        L.reach[d] = L.t;
+        const prev = game.prevReach[d];
+        events.push({ type: "milestone", depth: d, t: L.t, prev: prev == null ? null : prev });
+      }
+    }
+    if (has(game, "o3")) {
+      for (const f of D.FOSSILS) {
+        if (f.depth <= L.depth && !game.fossils[f.id]) {
+          game.fossils[f.id] = { lifeNo: game.lifeNo, depth: f.depth };
+          events.push({ type: "fossil", id: f.id });
+        }
+      }
+    }
+    if (L.depth >= D.GOAL && !L.cleared) {
+      L.cleared = true;
+      game.cleared = true;
+      game.clears.push({ lifeNo: game.lifeNo, totalTime: game.totalTime, lifeTime: L.t });
+      events.push({ type: "clear" });
+    }
   }
 
   function tap(game) {
     const L = game.life;
+    L.taps = (L.taps || []).filter((t) => t >= L.t - 1);
+    L.taps.push(L.t);
     let p = tapPower(game);
-    const crit = false;
+    const combo = has(game, "t2") && L.taps.length >= 5;
+    if (combo) p *= 1.5;
+    const crit = has(game, "t3") && rand(game) < 0.1;
+    if (crit) p *= 10;
     const r = dig(game, p);
-    return { gain: r.dug, crit, events: r.events };
+    return { gain: r.dug, crit, combo, events: r.events };
+  }
+
+  // ---- 光る鉱石 ----
+  function oreFreq(game) {
+    let f = 1;
+    if (has(game, "o1")) f *= 2;
+    if (game.life.upgrades.light) f *= 1.5;
+    return f;
+  }
+  function scheduleOre(game) {
+    const L = game.life;
+    const gap = (D.ORE.minGap + rand(game) * (D.ORE.maxGap - D.ORE.minGap)) / oreFreq(game);
+    L.ore = { shown: false, next: L.t + gap, kind: "gold", shownAt: null, x: 0.5, y: 0.5 };
+  }
+  function tapOre(game) {
+    const L = game.life;
+    if (!L.ore || !L.ore.shown) return null;
+    const rainbow = L.ore.kind === "rainbow";
+    const mult = rainbow ? D.ORE.rainbowMult : D.ORE.mult;
+    const dur = (rainbow ? D.ORE.rainbowDur : D.ORE.dur) * (has(game, "o2") ? 1.5 : 1);
+    L.boost = { mult, until: L.t + dur, kind: L.ore.kind };
+    scheduleOre(game);
+    return { mult, dur, kind: rainbow ? "rainbow" : "gold" };
   }
 
   function tick(game, dt) {
     const L = game.life;
     L.t += dt;
+    game.totalTime += dt;
+    const events = [];
+    if (L.boost && L.t >= L.boost.until) { L.boost = null; events.push({ type: "boostEnd" }); }
+    const o = L.ore;
+    if (o && !o.shown && L.t >= o.next) {
+      o.shown = true; o.shownAt = L.t;
+      o.kind = has(game, "o5") && rand(game) < D.ORE.rainbowChance ? "rainbow" : "gold";
+      o.x = 0.15 + rand(game) * 0.7; o.y = 0.2 + rand(game) * 0.5;
+      events.push({ type: "ore", kind: o.kind });
+    } else if (o && o.shown && L.t >= o.shownAt + D.ORE.show) {
+      scheduleOre(game);
+      events.push({ type: "oreGone" });
+    }
     const r = dig(game, autoPower(game) * dt);
-    return r.events;
+    return events.concat(r.events);
   }
 
   // ---- 買い物 ----
   function isUnlocked(game, id) {
     const b = BUILDING[id];
-    if (b.node && !(game.tree && game.tree[b.node])) return false;
+    if (b.node && !has(game, b.node)) return false;
     return game.life.layer >= LAYER_INDEX[b.layer];
   }
   function buildingCost(game, id) {
     const b = BUILDING[id];
-    return Math.ceil(b.cost * Math.pow(D.COST_GROWTH, game.life.owned[id] || 0));
+    return Math.ceil(b.cost * Math.pow(D.COST_GROWTH, game.life.owned[id] || 0) * (has(game, "f2") ? 0.9 : 1));
   }
   function buy(game, id) {
     const L = game.life;
@@ -143,7 +249,44 @@
     if (game.life.money < u.cost) return false;
     game.life.money -= u.cost;
     game.life.upgrades[id] = true;
+    if (u.kind === "light" && game.life.ore && !game.life.ore.shown) {
+      // 次の鉱石までの待ち時間を、明るくなった分だけ縮める
+      const o = game.life.ore;
+      o.next = game.life.t + (o.next - game.life.t) / 1.5;
+    }
     return true;
+  }
+
+  // ---- スキルツリー ----
+  function canUnlock(game, id) {
+    const n = NODE[id];
+    return !!n && !has(game, id) && (!n.req || has(game, n.req));
+  }
+  function unlockNode(game, id) {
+    if (!canUnlock(game, id) || game.shards < NODE[id].cost) return false;
+    game.shards -= NODE[id].cost;
+    game.tree[id] = true;
+    return true;
+  }
+  function wallTool(game) {
+    const next = D.LAYERS[game.life.layer + 1];
+    return game.life.atWall && next ? next.wall : null;
+  }
+
+  // ---- 転生 ----
+  function rebirthShards(game) {
+    return Math.floor(Math.sqrt(game.life.depth / D.SHARD_DIV) * (has(game, "o6") ? 1.25 : 1));
+  }
+  function rebirth(game) {
+    const s = rebirthShards(game);
+    if (s < 1) return null;
+    const L = game.life;
+    game.shards += s;
+    game.lives.push({ lifeNo: game.lifeNo, maxDepth: L.depth, t: L.t, shards: s });
+    game.prevReach = { ...game.prevReach, ...L.reach };
+    game.lifeNo += 1;
+    newLife(game);
+    return { shards: s };
   }
 
   // ---- 表示用の数字 ----
@@ -155,8 +298,7 @@
     const [u, name] = UNITS.find(([u]) => x >= u);
     const v = x / u;
     if (v >= 100) return commas(v) + name;
-    const s = (Math.floor(v * 10) / 10).toFixed(1).replace(/\.0$/, "");
-    return s + name;
+    return (Math.floor(v * 10) / 10).toFixed(1).replace(/\.0$/, "") + name;
   }
   function fmtDepth(m) {
     if (m < 10) return m.toFixed(1) + " m";
@@ -166,5 +308,9 @@
     return commas(km) + " km";
   }
 
-  return { newGame, layerOf, tapPower, autoPower, buildingPower, dig, tap, tick, isUnlocked, buildingCost, buy, canBuyUpgrade, buyUpgrade, fmtNum, fmtDepth, rand };
+  return {
+    newGame, layerOf, tapPower, autoPower, autoSpeed, buildingPower, fossilMult, dig, tap, tick, tapOre,
+    isUnlocked, buildingCost, buy, canBuyUpgrade, buyUpgrade, canUnlock, unlockNode, wallTool,
+    rebirthShards, rebirth, fmtNum, fmtDepth, rand,
+  };
 });
