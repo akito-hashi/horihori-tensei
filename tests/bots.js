@@ -76,15 +76,25 @@ function playLife(g, opt) {
   return "limit";
 }
 
+// 子どもらしい使い方：壁の道具が買えるなら買う。それ以外は安い順に、壁の道具のぶんを残さずに使う
+function spendCheapFirst(g) {
+  const tool = E.wallTool(g) || (g.lives.length && g.lives[g.lives.length - 1].wall);
+  if (tool && !g.tree[tool]) E.unlockNode(g, tool);
+  for (let guard = 0; guard < 50; guard++) {
+    const opts = D.TREE.filter((n) => E.canUnlock(g, n.id) && n.cost <= g.shards).sort((a, b) => a.cost - b.cost);
+    if (!opts.length || !E.unlockNode(g, opts[0].id)) return;
+  }
+}
+
 function playUntilClear(seed, opt = {}) {
   opt = { tapsPerSec: 3, oreCatch: 0.85, maxTotal: 6 * 3600, maxLife: 3600, slowWin: 120, slowPct: 0.08, ...opt };
   const g = E.newGame({ seed });
   const lives = [];
   let saving = null;
   while (g.totalTime < opt.maxTotal) {
-    spendShards(g, saving);
+    if (opt.cheapFirst) spendCheapFirst(g); else spendShards(g, saving);
     const res = playLife(g, opt);
-    lives.push({ t: g.life.t, depth: g.life.depth, res, shardsGot: res === "clear" ? 0 : E.rebirthShards(g) });
+    lives.push({ t: g.life.t, depth: g.life.depth, res, shardsGot: res === "clear" ? 0 : E.rebirthShards(g), reach: { ...g.life.reach } });
     if (res === "clear") break;
     saving = E.wallTool(g);
     if (!E.rebirth(g)) break;

@@ -77,8 +77,7 @@
   function autoRaw(game) {
     let p = 0;
     for (const b of D.BUILDINGS) p += buildingPower(game, b.id);
-    if (has(game, "f1")) p *= 1.5;
-    if (has(game, "f4")) p *= 2;
+    for (const nd of D.TREE) if (nd.autoMult && has(game, nd.id)) p *= nd.autoMult;
     return p * fossilMult(game);
   }
   function autoPower(game) {
@@ -87,8 +86,7 @@
   // タップ 1回の掘る力（かたさで割る前。連打・会心は含まない）
   function tapPower(game) {
     let p = pickMult(game);
-    if (has(game, "t1")) p *= 2;
-    if (has(game, "t5")) p *= 5;
+    for (const nd of D.TREE) if (nd.tapMult && has(game, nd.id)) p *= nd.tapMult;
     p *= fossilMult(game);
     if (has(game, "t4")) p += 0.05 * autoRaw(game);
     return p * boostMult(game);
@@ -305,7 +303,7 @@
     if (s < 1) return null;
     const L = game.life;
     game.shards += s;
-    game.lives.push({ lifeNo: game.lifeNo, maxDepth: L.depth, t: L.t, shards: s });
+    game.lives.push({ lifeNo: game.lifeNo, maxDepth: L.depth, t: L.t, shards: s, wall: wallTool(game) });
     game.prevReach = { ...game.prevReach, ...L.reach };
     game.lifeNo += 1;
     newLife(game);

@@ -1,5 +1,5 @@
 // ほりほり転生 — ゲームの数値・文章データ（ルールは engine.js）
-// 数値は tests/balance.test.js のボットで調整する（クリアまで約 2時間・転生 10回前後）
+// 数値は tests/balance.test.js のボットで調整する（クリアまで約 2時間・転生 5〜8回・転生直後は前世の 2.5倍以上速い）
 (function (root, factory) {
   if (typeof module === "object" && module.exports) module.exports = factory();
   else root.GameData = factory();
@@ -11,13 +11,13 @@
   // 地層。from: 始まる深さ(m) / hard: かたさ（掘る力をこれで割る） / value: 1m あたりのお金 / wall: 入るのに要る道具
   // grow: 地層の中でも深くなるほどかたくなる度合い（かたさ = hard × (深さ ÷ from)^grow）。地層の境目で柔らかくならないようにしてある
   const LAYERS = [
-    { id: "soil", name: "土の層", icon: "🌱", from: 0, hard: 0.55, value: 1, grow: 0 },
-    { id: "rock", name: "岩盤の層", icon: "🪨", from: 100, hard: 2.2, value: 5, grow: 0.5 },
-    { id: "fossil", name: "化石の層", icon: "🦴", from: 2000, hard: 11, value: 40, grow: 0.5 },
-    { id: "crust", name: "地殻の底", icon: "🧱", from: 12000, hard: 27.5, value: 150, grow: 0.5 },
-    { id: "mantle", name: "マントル", icon: "🔥", from: 35000, hard: 165, value: 750, grow: 0.5, wall: "suit" },
-    { id: "outer", name: "外核", icon: "🌀", from: 2900000, hard: 1650, value: 16000, grow: 0.5, wall: "drill" },
-    { id: "inner", name: "内核", icon: "💎", from: 5150000, hard: 2475, value: 36000, grow: 0.5, wall: "starpick" },
+    { id: "soil", name: "土の層", icon: "🌱", from: 0, hard: 1.485, value: 1, grow: 0 },
+    { id: "rock", name: "岩盤の層", icon: "🪨", from: 100, hard: 5.94, value: 5, grow: 0.5 },
+    { id: "fossil", name: "化石の層", icon: "🦴", from: 2000, hard: 29.7, value: 40, grow: 0.5 },
+    { id: "crust", name: "地殻の底", icon: "🧱", from: 12000, hard: 74.25, value: 150, grow: 0.5 },
+    { id: "mantle", name: "マントル", icon: "🔥", from: 35000, hard: 445.5, value: 750, grow: 0.5, wall: "suit" },
+    { id: "outer", name: "外核", icon: "🌀", from: 2900000, hard: 4455, value: 16000, grow: 0.5, wall: "drill" },
+    { id: "inner", name: "内核", icon: "💎", from: 5150000, hard: 6682.5, value: 36000, grow: 0.5, wall: "starpick" },
   ];
 
   // 仲間・機械。cost: 1台目の値段 / out: 1台の掘る力（毎秒） / layer: 買えるようになる地層 / node: スキルツリーで解放
@@ -53,15 +53,15 @@
 
   // スキルツリー（星のかけらで開放。ずっと残る）。req: 先に開放が必要なマス
   const TREE = [
-    { id: "t1", branch: "tap", name: "強いつるはし", icon: "⛏️", cost: 1, desc: "タップ力 ×2" },
+    { id: "t1", branch: "tap", name: "強いつるはし", icon: "⛏️", cost: 1, tapMult: 3, desc: "タップ力 ×3" },
     { id: "t2", branch: "tap", name: "連打ボーナス", icon: "👆", cost: 3, desc: "1秒に 5回以上タップしている間 ×1.5" },
     { id: "t3", branch: "tap", name: "会心の一撃", icon: "💥", cost: 8, desc: "タップの 10回に 1回が 10倍" },
     { id: "t4", branch: "tap", name: "仲間の力", icon: "🤝", cost: 20, desc: "タップに、毎秒の掘る力の 5% が上乗せ" },
-    { id: "t5", branch: "tap", name: "黄金のつるはし", icon: "🌟", cost: 60, desc: "タップ力 ×5" },
-    { id: "f1", branch: "friend", name: "先輩の教え", icon: "📣", cost: 1, desc: "仲間・機械の掘る力 ×1.5" },
+    { id: "t5", branch: "tap", name: "黄金のつるはし", icon: "🌟", cost: 60, tapMult: 5, desc: "タップ力 ×5" },
+    { id: "f1", branch: "friend", name: "先輩の教え", icon: "📣", cost: 1, autoMult: 3, desc: "仲間・機械の掘る力 ×3" },
     { id: "f2", branch: "friend", name: "まとめ買い割引", icon: "🏷️", cost: 3, desc: "仲間・機械の値段が 10% 安い" },
     { id: "f3", branch: "friend", name: "チームワーク", icon: "👥", cost: 8, desc: "同じ仲間が 25人そろうごとに、その仲間 ×2" },
-    { id: "f4", branch: "friend", name: "気合いの朝礼", icon: "☀️", cost: 20, desc: "仲間・機械の掘る力 ×2" },
+    { id: "f4", branch: "friend", name: "気合いの朝礼", icon: "☀️", cost: 20, autoMult: 2, desc: "仲間・機械の掘る力 ×2" },
     { id: "f5", branch: "friend", name: "地底の友だち", icon: "👽", cost: 60, desc: "とても強い仲間「地底人」がやとえる" },
     { id: "o1", branch: "treasure", name: "光る鉱石", icon: "💎", cost: 1, desc: "光る鉱石が 2倍出やすい" },
     { id: "o2", branch: "treasure", name: "長持ち", icon: "⏳", cost: 3, desc: "鉱石のブーストが 1.5倍長い" },
@@ -69,9 +69,9 @@
     { id: "o4", branch: "treasure", name: "宝の地図", icon: "🗺️", cost: 20, desc: "新しい地層に入るたびに、お金のボーナス" },
     { id: "o5", branch: "treasure", name: "虹の鉱石", icon: "🌈", cost: 60, desc: "光る鉱石がときどき虹色に（10秒間 ×77）" },
     { id: "o6", branch: "treasure", name: "かけら増量", icon: "✦", cost: 150, desc: "転生でもらえる星のかけら ×1.25" },
-    { id: "suit", branch: "tool", name: "耐熱スーツ", icon: "🧯", cost: 25, desc: "マントルの壁を越えられる" },
-    { id: "drill", branch: "tool", name: "超高圧ドリル", icon: "🌀", cost: 400, desc: "外核の壁を越えられる" },
-    { id: "starpick", branch: "tool", name: "星のつるはし", icon: "⭐", cost: 1300, desc: "内核の壁を越えられる" },
+    { id: "suit", branch: "tool", name: "耐熱スーツ", icon: "🧯", cost: 12, desc: "マントルの壁を越えられる" },
+    { id: "drill", branch: "tool", name: "超高圧ドリル", icon: "🌀", cost: 200, desc: "外核の壁を越えられる" },
+    { id: "starpick", branch: "tool", name: "星のつるはし", icon: "⭐", cost: 280, desc: "内核の壁を越えられる" },
   ];
   // 枝の中は根元から順番
   for (const br of ["tap", "friend", "treasure", "tool"]) {
@@ -107,7 +107,7 @@
   const ORE = { minGap: 120, maxGap: 240, show: 12, mult: 7, dur: 15, rainbowChance: 0.1, rainbowMult: 77, rainbowDur: 10 };
 
   // 転生でもらえる星のかけら = floor(√(最高の深さ ÷ SHARD_DIV))
-  const SHARD_DIV = 35;
+  const SHARD_DIV = 60;
 
   return { GOAL, LAYERS, BUILDINGS, COST_GROWTH, UPGRADES, TREE, FOSSILS, FOSSIL_BONUS, MILESTONES, ORE, SHARD_DIV };
 });

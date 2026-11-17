@@ -57,13 +57,16 @@ test("スキルツリーは 3本の枝（5・5・6マス）と道具 3つ。枝�
   assert.equal(g.shards, 0);
 });
 
-test("強いつるはし ×2・黄金のつるはし ×5 がタップ力にかかる", () => {
+const node = (id) => D.TREE.find((n) => n.id === id);
+test("強いつるはし・黄金のつるはしの倍率がタップ力にかかる（説明文と同じ数）", () => {
   const g = fresh();
   const base = E.tapPower(g);
   grant(g, "t1");
-  assert.equal(E.tapPower(g), base * 2);
+  assert.equal(E.tapPower(g), base * node("t1").tapMult);
   grant(g, "t5");
-  assert.equal(E.tapPower(g), base * 10);
+  assert.equal(E.tapPower(g), base * node("t1").tapMult * node("t5").tapMult);
+  for (const id of ["t1", "t5"]) assert.ok(node(id).desc.includes("×" + node(id).tapMult));
+  for (const id of ["f1", "f4"]) assert.ok(node(id).desc.includes("×" + node(id).autoMult));
 });
 
 test("仲間の力：タップに毎秒の掘る力の 5% が上乗せ", () => {
@@ -74,19 +77,20 @@ test("仲間の力：タップに毎秒の掘る力の 5% が上乗せ", () => {
   assert.ok(Math.abs(E.tapPower(g) - (base + 0.05 * E.autoPower(g))) < 1e-9);
 });
 
-test("先輩の教え ×1.5・気合いの朝礼 ×2・チームワーク（25人ごとに ×2）・まとめ買い割引", () => {
+test("先輩の教え・気合いの朝礼・チームワーク（25人ごとに ×2）・まとめ買い割引", () => {
   const g = fresh();
   g.life.owned.apprentice = 24;
   const a = E.autoPower(g);
+  const m1 = node("f1").autoMult, m4 = node("f4").autoMult;
   grant(g, "f1");
-  assert.ok(Math.abs(E.autoPower(g) - a * 1.5) < 1e-9);
+  assert.ok(Math.abs(E.autoPower(g) - a * m1) < 1e-9);
   grant(g, "f4");
-  assert.ok(Math.abs(E.autoPower(g) - a * 3) < 1e-9);
+  assert.ok(Math.abs(E.autoPower(g) - a * m1 * m4) < 1e-9);
   const before = E.autoPower(g);
   grant(g, "f3");
   assert.ok(Math.abs(E.autoPower(g) - before) < 1e-9, "24人では変わらない");
   g.life.owned.apprentice = 25;
-  assert.ok(Math.abs(E.autoPower(g) - 25 * D.BUILDINGS[0].out * 3 * 2) < 1e-9);
+  assert.ok(Math.abs(E.autoPower(g) - 25 * D.BUILDINGS[0].out * m1 * m4 * 2) < 1e-9);
   const c = E.buildingCost(g, "apprentice");
   grant(g, "f2");
   assert.equal(E.buildingCost(g, "apprentice"), Math.ceil(D.BUILDINGS[0].cost * Math.pow(D.COST_GROWTH, 25) * 0.9));
