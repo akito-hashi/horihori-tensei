@@ -47,10 +47,20 @@
     } catch (e) { /* 音が出なくても遊びは止めない */ }
   }
 
+  // iPhone では、ボタンを押したときに音の準備をしておかないと、最初のタップが鳴らないことがある
+  function unlock() {
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      ctx = ctx || new AC();
+      if (ctx.state === "suspended") ctx.resume();
+    } catch (e) { /* 無視 */ }
+  }
+
   function setOn(v) {
     on = !!v;
     try { localStorage.setItem(KEY, on ? "on" : "off"); } catch (e) { /* 無視 */ }
   }
 
-  window.Sfx = { play, setOn, isOn: () => on };
+  window.Sfx = { play, setOn, unlock, isOn: () => on };
 })();

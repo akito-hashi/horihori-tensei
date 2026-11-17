@@ -2,7 +2,7 @@
 // アプリのファイル：ネットから最新を取り、つながらないときだけ保存済みを使う。
 // 書体（Google Fonts）：一度読み込んだものを保存して使う。
 // ファイルを追加・改名したときは FILES を直し、VERSION の数字を上げる。
-const VERSION = "v1";
+const VERSION = "v2";
 const CACHE = "horihori-tensei-" + VERSION;
 const FONT_CACHE = "horihori-tensei-fonts";
 const FILES = [
@@ -18,6 +18,13 @@ const FILES = [
   "./icons/icon-192.png",
   "./icons/icon-512.png",
 ];
+
+function withTimeout(p, ms) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error("timeout")), ms);
+    p.then((r) => { clearTimeout(t); resolve(r); }, (e) => { clearTimeout(t); reject(e); });
+  });
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
@@ -49,7 +56,8 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
   event.respondWith(
     // HTTP キャッシュを通さずに確認する（更新直後に新旧のファイルが混ざらないように）
-    fetch(req, { cache: "no-cache" })
+    // 電波が弱いときに待たされないよう、3秒たっても返事がなければ保存済みを使う
+    withTimeout(fetch(req, { cache: "no-cache" }), 3000)
       .then((res) => {
         if (res.ok) {
           const copy = res.clone();

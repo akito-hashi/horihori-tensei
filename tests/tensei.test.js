@@ -323,3 +323,12 @@ test("こわれた・古いセーブを読みこむときは、知らないも�
   assert.equal(E.sanitize(neg), true);
   assert.equal(neg.life.owned.apprentice, undefined);
 });
+
+test("セーブの点検：前世の記録やクリア記録のおかしな項目は取りのぞく", () => {
+  const g = fresh();
+  g.lives = [{ lifeNo: 1, maxDepth: 500, t: 60, shards: 3, wall: "suit" }, { lifeNo: "<img>", maxDepth: 1, t: 1, shards: 1 }, null];
+  g.clears = [{ lifeNo: 2, totalTime: 99, lifeTime: 9 }, { lifeNo: 3 }];
+  assert.equal(E.sanitize(g), true);
+  assert.deepEqual(g.lives, [{ lifeNo: 1, maxDepth: 500, t: 60, shards: 3, wall: "suit" }]);
+  assert.deepEqual(g.clears, [{ lifeNo: 2, totalTime: 99, lifeTime: 9 }]);
+});

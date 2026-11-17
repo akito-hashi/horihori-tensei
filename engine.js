@@ -327,8 +327,11 @@
       game.prevReach = keep(game.prevReach, (k, v) => num(v));
       L.reach = keep(L.reach, (k, v) => num(v));
       L.taps = Array.isArray(L.taps) ? L.taps.filter(num) : [];
-      if (!Array.isArray(game.lives)) game.lives = [];
-      if (!Array.isArray(game.clears)) game.clears = [];
+      const nums = (o, keys) => o && typeof o === "object" && keys.every((k) => num(o[k]));
+      game.lives = (Array.isArray(game.lives) ? game.lives : []).filter((x) => nums(x, ["lifeNo", "maxDepth", "t", "shards"]))
+        .map((x) => ({ lifeNo: x.lifeNo, maxDepth: x.maxDepth, t: x.t, shards: x.shards, wall: NODE[x.wall] ? x.wall : null }));
+      game.clears = (Array.isArray(game.clears) ? game.clears : []).filter((x) => nums(x, ["lifeNo", "totalTime", "lifeTime"]))
+        .map((x) => ({ lifeNo: x.lifeNo, totalTime: x.totalTime, lifeTime: x.lifeTime }));
       if (!num(game.totalTime)) game.totalTime = 0;
       game.cleared = !!game.cleared;
       L.atWall = !!L.atWall; L.cleared = !!L.cleared;

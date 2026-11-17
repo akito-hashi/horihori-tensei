@@ -2,27 +2,45 @@
 (function () {
   "use strict";
   const D = window.GameData, E = window.Engine;
-  const S = window.Sfx || { play() {}, setOn() {}, isOn: () => false };
+  const S = window.Sfx || { play() {}, setOn() {}, isOn: () => false, unlock() {} };
   const KEY = "horihori-tensei-v1";
   const app = document.getElementById("app");
   const reduceMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+  let stamp = 0; // 読みこんだ・保存したセーブの時刻（別のタブが新しく保存したかを見分ける）
   let game = load();
-  const ui = { view: "title", prev: null, tab: "friends", sel: null, fsel: null, confirm: null, shopSig: "", lastSave: 0, raf: null, last: 0, banner: null };
+  const ui = { view: "title", prev: null, tab: "friends", sel: null, fsel: null, confirm: null, shopSig: "", lastSave: 0, raf: null, last: 0, pending: [], note: null };
 
   // ---- 保存 ----
+  function readStored() {
+    try { return JSON.parse(localStorage.getItem(KEY)); } catch (e) { return null; }
+  }
   function load() {
-    try {
-      const s = JSON.parse(localStorage.getItem(KEY));
-      if (s && s.v === 1 && E.sanitize(s.game)) return s.game;
-    } catch (e) { /* こわれたセーブは無視 */ }
+    const s = readStored();
+    if (s && s.v === 1 && E.sanitize(s.game)) { stamp = s.savedAt || 0; return s.game; }
     return null;
   }
-  function save() {
+  // 別のタブでもっと新しく保存されていたら、上書きせずにそちらを読みこんでタイトルにもどる
+  function newerElsewhere() {
+    const s = readStored();
+    return !!(s && (s.savedAt || 0) > stamp);
+  }
+  function adoptNewer() {
+    game = load();
+    ui.confirm = null;
+    ui.note = "別の画面で進めたデータを読みこみました。";
+    go("title");
+  }
+  function save(force) {
     if (!game) return;
-    try { localStorage.setItem(KEY, JSON.stringify({ v: 1, game })); } catch (e) { /* 容量不足などでも遊びは止めない */ }
+    if (!force && newerElsewhere()) { adoptNewer(); return; }
+    try {
+      stamp = Date.now();
+      localStorage.setItem(KEY, JSON.stringify({ v: 1, game, savedAt: stamp }));
+    } catch (e) { /* 容量不足などでも遊びは止めない */ }
     ui.lastSave = performance.now();
   }
+  window.addEventListener("storage", (e) => { if (e.key === KEY && ui.view !== "title" && newerElsewhere()) adoptNewer(); });
 
   // ---- 小物 ----
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -34,6 +52,12 @@
   const LAYER_AT = Object.fromEntries(D.LAYERS.map((l) => [l.from, l]));
   const BRANCHES = [["tap", "⛏️ 掘る力"], ["friend", "🧑‍🔧 仲間"], ["treasure", "💎 お宝"], ["tool", "🔑 道具"]];
   const gaugePos = (d) => Math.log10(1 + d) / Math.log10(1 + D.GOAL);
+  // 次の壁に必要で、まだ持っていない道具（いま壁にいるか、前の人生が壁で終わったとき）
+  function neededTool() {
+    const last = game.lives[game.lives.length - 1];
+    const t = E.wallTool(game) || (last && last.wall);
+    return t && !game.tree[t] ? t : null;
+  }
   const affordableNode = () => D.TREE.some((n) => E.canUnlock(game, n.id) && game.shards >= n.cost);
 
   // ---- 画面の切りかえ ----
@@ -50,7 +74,7 @@
     app.innerHTML = VIEWS[ui.view]();
     if (ui.confirm) app.insertAdjacentHTML("beforeend", `<div id="confirm" role="dialog" aria-modal="true"><div class="card">${ui.confirm.text}</div>
       <button class="btn" data-act="confirm-yes">${ui.confirm.yes}</button><button class="btn dark" data-act="confirm-no">やめる</button></div>`);
-    if (ui.view === "dig") update(true);
+    if (ui.view === "dig") { update(true); const p = ui.pending; ui.pending = []; p.forEach(toast); }
     if (ui.view !== "clear") document.querySelectorAll(".confetti").forEach((c) => c.remove());
     running();
   }
@@ -65,6 +89,7 @@
         <div class="logo"><h1 class="big hot">ほりほり<br>転生</h1><div class="s">めざせ 地球の中心 6,371km</div></div>
         <div class="titlepick" aria-hidden="true">⛏️</div>
         <div class="center sub" style="opacity:.95">掘って、転生して、もっと深く。</div>
+        ${ui.note ? `<div class="center sub" style="opacity:1;color:#fff6c4">${ui.note}</div>` : ""}
         <div class="grow"></div>
         <button class="btn" data-act="new">はじめから</button>
         ${game ? `<button class="btn dark" data-act="continue">つづきから ・ ${game.lifeNo}回目の人生 ・ ${M(L.depth)}</button>` : ""}
@@ -76,7 +101,8 @@
       const L = game.life;
       const marks = D.LAYERS.filter((l) => l.wall).map((l) => `<span class="w ${game.tree[l.wall] ? "ok" : ""}" style="top:${(gaugePos(l.from) * 100).toFixed(1)}%"></span>`).join("");
       return `<header class="hud">
-          <div class="top"><span>${game.lifeNo}回目の人生</span><span class="sh">✦ <b class="num" id="shards">${N(game.shards)}</b></span></div>
+          <div class="top"><span>${game.lifeNo}回目の人生</span><span class="sh">✦ <b class="num" id="shards">${N(game.shards)}</b>
+            <button data-act="sound" class="snd" aria-label="効果音のオンオフ">${S.isOn() ? "🔊" : "🔇"}</button></span></div>
           <div id="depth" class="depth num">${M(L.depth)}</div>
           <div class="row2"><span>💰 <b class="num" id="money">${N(L.money)}</b></span><span id="speed"></span></div>
         </header>
@@ -95,7 +121,8 @@
 
     tree() {
       app.className = "treebg";
-      if (!ui.sel) ui.sel = D.TREE.find((n) => E.canUnlock(game, n.id))?.id || "t1";
+      const need = neededTool();
+      if (!ui.sel) ui.sel = need || D.TREE.find((n) => E.canUnlock(game, n.id))?.id || "t1";
       const n = NODE[ui.sel];
       const have = !!game.tree[n.id];
       const can = E.canUnlock(game, n.id);
@@ -109,7 +136,8 @@
           <div class="tlabels">${BRANCHES.map(([, l]) => `<span>${l}</span>`).join("")}</div>
           <div class="tree">${BRANCHES.map(([b]) => col(b)).join("")}</div>
           <div class="root" aria-hidden="true">🌟</div>
-          <div class="detail glass"><h3><span>${n.icon} ${n.name}</span>${state}</h3><p>${n.desc}</p>
+          <div class="detail glass"><h3><span>${n.icon} ${n.name}</span>${state}</h3><p>${n.desc}${need && n.id !== need && !have && can && game.shards >= n.cost && game.shards - n.cost < NODE[need].cost
+            ? `<br><b style="color:#ffb3b3">⚠️ これを開放すると「${NODE[need].name}」（✦${N(NODE[need].cost)}）のぶんが足りなくなる</b>` : need && n.id === need && !have ? "<br>先に進むには、まずこれ！" : ""}</p>
             ${have ? "" : `<button class="btn" data-act="unlock" ${can && game.shards >= n.cost ? "" : "disabled"}>✦ ${N(n.cost)} で開放する</button>`}</div>
         </div>${navHtml()}`;
     },
@@ -119,7 +147,7 @@
       const found = Object.keys(game.fossils).length;
       const f = ui.fsel && D.FOSSILS.find((x) => x.id === ui.fsel && game.fossils[x.id]);
       return `<div class="screen">
-          <div><span class="hot" style="font-size:22px">📖 化石図鑑</span>
+          <div><div class="thead"><span class="hot" style="font-size:22px">📖 化石図鑑</span><button class="sub" data-act="records">📜 記録</button></div>
             <div class="sub" style="margin-top:2px">見つけた化石 ${found} / ${D.FOSSILS.length} ・ 掘る力 <b style="color:var(--gold)">+${Math.round(found * D.FOSSIL_BONUS * 100)}%</b>（ずっと続く）</div></div>
           <div class="fossils">${D.FOSSILS.map((x) => game.fossils[x.id]
             ? `<button class="fs" data-fossil="${x.id}" aria-pressed="${ui.fsel === x.id}">${x.icon}<small>${x.name}</small></button>`
@@ -136,11 +164,12 @@
       const s = E.rebirthShards(game);
       const fossilsNow = Object.values(game.fossils).filter((f) => f.lifeNo === game.lifeNo).length;
       return `<div class="screen">
-          <div class="center"><div class="sub">${game.lifeNo}回目の人生</div><div class="hot" style="font-size:30px;text-shadow:0 0 20px #8fb8ff">転生する？</div></div>
+          <div class="thead"><span class="sub">${game.lifeNo}回目の人生</span><button class="sub" data-act="records">📜 記録</button></div>
+          <div class="hot center" style="font-size:30px;text-shadow:0 0 20px #8fb8ff;margin-top:-8px">転生する？</div>
           <div class="center sub">もらえる星のかけら</div>
           <div class="shardnum num" id="shardGain">✦ ${N(s)}</div>
           <div class="glass" style="padding:4px 0">
-            <div class="rowx"><span>いちばん深いところ</span><b class="num">${M(L.depth)}</b></div>
+            <div class="rowx"><span>いちばん深いところ</span><b class="num" id="rbDepth">${M(L.depth)}</b></div>
             <div class="rowx"><span>この人生で遊んだ時間</span><b class="num">${mmss(L.t)}</b></div>
             <div class="rowx"><span>見つけた化石</span><b class="num">${fossilsNow} 個</b></div></div>
           <div class="glass pad" style="font-size:12px;line-height:1.7">リセット：深さ・お金・仲間・道具<br>ずっと残る：<b style="color:var(--gold)">スキルツリー・星のかけら・化石・前世の記録</b></div>
@@ -163,6 +192,7 @@
           <div class="grow"></div>
           <button class="btn" data-act="records">記録を見る</button>
           <button class="btn dark" data-nav="rebirth">転生して、もっと速いクリアに挑戦</button>
+          <button class="sub" data-nav="dig" style="padding:2px">地底にもどる</button>
         </div>`;
     },
 
@@ -207,12 +237,13 @@
   function update(force) {
     if (ui.view !== "dig" || !$("#pit")) return;
     const L = game.life;
+    const pit = $("#pit");
     $("#depth").textContent = M(L.depth);
     $("#money").textContent = N(L.money);
     $("#shards").textContent = N(game.shards);
-    $("#speed").textContent = L.atWall ? "壁で止まっている" : `毎秒 +${M(E.autoSpeed(game))}`;
+    $("#speed").textContent = L.cleared ? "🏆 クリアずみ" : L.atWall ? "壁で止まっている" : `毎秒 +${M(E.autoSpeed(game))}`;
+    if (L.cleared && !$("#cleared")) pit.insertAdjacentHTML("beforeend", `<div id="wall" class="cleared" role="status"><b class="t" style="color:var(--gold)">🏆 地球の中心にクリアずみ！</b><br>転生すると、もっと速いクリアに挑戦できる。<button class="btn" data-nav="rebirth">✨ 転生する</button></div><span id="cleared"></span>`);
     const layer = E.layerOf(game);
-    const pit = $("#pit");
     const want = "L-" + layer.id;
     if (!pit.classList.contains(want)) { pit.className = want; }
     const hx = E.hardNow(game) / D.LAYERS[0].hard; // 土を 1 としたかたさ
@@ -220,7 +251,7 @@
     $("#gdot").style.top = (gaugePos(L.depth) * 100).toFixed(2) + "%";
     // お店：中身が変わったときだけ作り直す
     const items = shopItems();
-    const sig = ui.tab + items.map((i) => i.key).join("|");
+    const sig = ui.tab + Math.round(Math.log10(E.hardNow(game)) * 20) + items.map((i) => i.key).join("|");
     const shop = $("#shop");
     if (force || sig !== ui.shopSig) {
       ui.shopSig = sig;
@@ -245,7 +276,7 @@
     } else if (bar) { bar.remove(); const r = $("#rays"); if (r) r.remove(); }
     // 壁
     const wall = $("#wall");
-    const tool = E.wallTool(game);
+    const tool = L.cleared ? null : E.wallTool(game);
     if (tool && !wall) {
       const n = NODE[tool];
       const can = game.shards >= n.cost;
@@ -254,7 +285,7 @@
         このままでは進めない。スキルツリーの <b style="color:var(--gold)">「${n.name}」</b>（✦${N(n.cost)}）が必要！<br>
         <span class="sub">いま ✦${N(game.shards)} ・ 転生すると ✦${N(s)} もらえる</span>
         <button class="btn" data-nav="${can ? "tree" : "rebirth"}">${can ? "🌳 スキルツリーで開放する" : `✨ 転生して ✦${N(s)} もらう`}</button></div><div class="wallband" id="wallband"></div>`);
-    } else if (!tool && wall) { wall.remove(); const wb = $("#wallband"); if (wb) wb.remove(); }
+    } else if (!tool && wall && !L.cleared) { wall.remove(); const wb = $("#wallband"); if (wb) wb.remove(); }
   }
 
   // ---- 演出 ----
@@ -271,7 +302,7 @@
   }
   function toast(html) {
     const box = $("#toasts");
-    if (!box) return;
+    if (!box) { ui.pending.push(html); ui.pending = ui.pending.slice(-2); return; }
     const el = document.createElement("div");
     el.className = "toast";
     el.innerHTML = html;
@@ -337,6 +368,10 @@
     ui.last = now;
     if (dt > 0) handleEvents(E.tick(game, dt));
     if (ui.view === "dig") update(false);
+    else if (ui.view === "rebirth" && $("#shardGain")) {
+      $("#shardGain").textContent = `✦ ${N(E.rebirthShards(game))}`;
+      $("#rbDepth").textContent = M(game.life.depth);
+    }
     if (now - ui.lastSave > 5000) save();
     running();
   }
@@ -348,6 +383,7 @@
   // ---- 操作 ----
   function digTap(ev) {
     const pit = $("#pit");
+    if (game.life.cleared) return;
     const r = E.tap(game);
     const box = pit.getBoundingClientRect();
     const x = ev && ev.clientX != null ? ev.clientX - box.left : box.width / 2;
@@ -384,8 +420,13 @@
     }
     if (d.buy) { if (E.buy(game, d.buy)) { S.play("buy"); save(); } update(true); return; }
     if (d.upg) { if (E.buyUpgrade(game, d.upg)) { S.play("buy"); save(); } update(true); return; }
-    if (d.tab) { ui.tab = d.tab; render(); return; }
-    if (d.nav) { if (d.nav === "tree") ui.sel = null; go(d.nav); return; }
+    if (d.tab) {
+      ui.tab = d.tab;
+      app.querySelectorAll("[data-tab]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.tab === ui.tab)));
+      update(true);
+      return;
+    }
+    if (d.nav) { if (d.nav === "tree") ui.sel = el.closest("#wall") ? E.wallTool(game) : null; go(d.nav); return; }
     if (d.node) { ui.sel = d.node; render(); return; }
     if (d.fossil) { ui.fsel = d.fossil; render(); return; }
     act(d.act);
@@ -398,8 +439,12 @@
         startNew(); return;
       case "confirm-yes": { const f = ui.confirm && ui.confirm.run; ui.confirm = null; if (f) f(); else render(); return; }
       case "confirm-no": ui.confirm = null; render(); return;
-      case "continue": go("dig"); return;
-      case "sound": S.setOn(!S.isOn()); S.play("buy"); render(); return;
+      case "continue": S.unlock(); ui.note = null; go(game.life.cleared ? "clear" : "dig"); return;
+      case "sound": {
+        S.setOn(!S.isOn()); S.unlock(); S.play("buy");
+        if (ui.view === "dig") { const b = $(".hud [data-act=sound]"); if (b) b.textContent = S.isOn() ? "🔊" : "🔇"; } else render();
+        return;
+      }
       case "unlock": {
         if (E.unlockNode(game, ui.sel)) { S.play("unlock"); save(); }
         render(); return;
@@ -419,8 +464,10 @@
   }
 
   function startNew() {
+    S.unlock();
+    ui.note = null;
     game = E.newGame({});
-    save();
+    save(true);
     ui.tab = "friends";
     go("dig");
   }
