@@ -2,13 +2,16 @@
 (function () {
   "use strict";
   const D = window.GameData, E = window.Engine;
-  const C = window.Chars;
+  // キャラの絵（chars.js）が読めなかったときは絵文字で代わりに出す
+  const emo = (e) => () => `<svg viewBox="0 0 100 100" class="ch"><text x="50" y="72" font-size="60" text-anchor="middle">${e}</text></svg>`;
+  const C = window.Chars || { mog: emo("🐹"), gan: emo("🧔"), drill: emo("🤖"), soko: emo("👽"), player: emo("⛏️") };
   const S = window.Sfx || { play() {}, setOn() {}, isOn: () => false, unlock() {} };
   const KEY = "horihori-tensei-v1";
   const app = document.getElementById("app");
   const reduceMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   let stamp = 0; // 読みこんだ・保存したセーブの時刻（別のタブが新しく保存したかを見分ける）
+  let unreadable = false; // 何か保存されているが、このバージョンでは読めない
   let game = load();
   const ui = { view: "title", prev: null, tab: "friends", sel: null, fsel: null, confirm: null, shopSig: "", lastSave: 0, raf: null, last: 0, pending: [], note: null };
 
@@ -18,7 +21,8 @@
   }
   function load() {
     const s = readStored();
-    if (s && s.v === 1 && E.sanitize(s.game)) { stamp = s.savedAt || 0; return s.game; }
+    if (s && s.v === 1 && E.sanitize(s.game)) { stamp = s.savedAt || 0; unreadable = false; return s.game; }
+    try { unreadable = !!localStorage.getItem(KEY); } catch (e) { unreadable = false; }
     return null;
   }
   // 別のタブでもっと新しく保存されていたら、上書きせずにそちらを読みこんでタイトルにもどる
@@ -106,6 +110,7 @@
             <button data-act="sound" class="snd" aria-label="効果音のオンオフ">${S.isOn() ? "🔊" : "🔇"}</button></span></div>
           <div id="depth" class="depth num">${M(L.depth)}</div>
           <div class="row2"><span>💰 <b class="num" id="money">${N(L.money)}</b></span><span id="speed"></span></div>
+          <div id="boostslot"></div>
         </header>
         <section id="pit" class="L-${E.layerOf(game).id}" tabindex="0" role="button" aria-label="タップで掘る">
           <span class="chip layerchip" id="layerchip"></span>
@@ -235,10 +240,10 @@
       const label = have ? `✓ ${k.name}` : can ? `${k.name} ${N(price)}💰` : `Lv.${k.need} ${k.name}`;
       return `<button class="sk ${have ? "on" : can ? "can" : ""}" data-skill="${k.id}" ${have || !can ? "disabled" : ""} ${can && !have ? `data-price="${price}"` : ""} title="${k.desc}" aria-label="${k.name}：${k.desc}">${label}</button>`;
     }).join("");
-    const each = n ? E.compPower(game, c.id) : c.out;
+    const each = n ? E.compShown(game, c.id) : E.compShown(game, c.id, c.out);
     return `<div class="cc" data-card="${c.id}"><div class="pic">${PIC[c.id](st)}</div>
       <div class="info"><b>${c.name} <span class="num">Lv.${n}</span></b>
-        <small>${n ? `毎秒 +${perSec(each)}` : `${c.kind}・仲間にすると 毎秒 +${perSec(c.out)}`}${ms.next ? ` ・ あと${ms.next - n}で${ms.transform ? "変身！" : "パワー×2"}` : ""}</small>
+        <small>${n ? `毎秒 +<span data-ps="${c.id}">${perSec(each)}</span>` : `${c.kind}・仲間にすると 毎秒 +${perSec(each)}`}${ms.next ? ` ・ あと${ms.next - n}で${ms.transform ? "変身！" : "パワー×2"}` : ""}</small>
         <div class="bar"><i style="width:${pct}%"></i></div><div class="sks">${sks}</div></div>
       <button class="cost num" data-lvup="${c.id}" data-price="${cost}">${N(cost)} 💰<i>${n ? "強化" : "仲間にする"}</i></button></div>`;
   }
@@ -252,7 +257,7 @@
   }
   function shopSig() {
     const L = game.life;
-    return [ui.tab, Math.round(Math.log10(E.hardNow(game)) * 20), JSON.stringify(L.lv), Object.keys(L.skills).join(), JSON.stringify(L.gear),
+    return [ui.tab, JSON.stringify(L.lv), Object.keys(L.skills).join(), JSON.stringify(L.gear),
       COMPS.map((c) => E.isUnlocked(game, c.id) ? 1 : 0).join(""), game.tree.f5 ? 1 : 0].join("|");
   }
   function shopHtml() {
@@ -280,6 +285,7 @@
     const shop = $("#shop");
     if (force || sig !== ui.shopSig) { ui.shopSig = sig; shop.innerHTML = shopHtml(); }
     shop.querySelectorAll("[data-price]").forEach((el) => el.classList.toggle("poor", L.money < +el.dataset.price));
+    shop.querySelectorAll("[data-ps]").forEach((el) => { const t = perSec(E.compShown(game, el.dataset.ps)); if (el.textContent !== t) el.textContent = t; });
     // 光る鉱石
     const ore = $("#ore");
     if (L.ore && L.ore.shown && !ore) {
@@ -289,7 +295,7 @@
     const b = L.boost && L.t < L.boost.until ? L.boost : null;
     let bar = $("#boost");
     if (b) {
-      if (!bar) { pit.insertAdjacentHTML("beforeend", `<div id="boost"></div>${reduceMotion() ? "" : '<div class="rays" id="rays"></div>'}`); bar = $("#boost"); }
+      if (!bar) { $("#boostslot").insertAdjacentHTML("beforeend", '<div id="boost"></div>'); if (!reduceMotion()) pit.insertAdjacentHTML("afterbegin", '<div class="rays" id="rays"></div>'); bar = $("#boost"); }
       bar.className = b.kind === "rainbow" ? "rainbow" : "";
       bar.innerHTML = `<span>${b.kind === "rainbow" ? "🌈 虹の鉱石" : "✨ 光る鉱石"} ブースト ×${b.mult}</span><span class="num">残り ${Math.ceil(b.until - L.t)}秒</span>`;
     } else if (bar) { bar.remove(); const r = $("#rays"); if (r) r.remove(); }
@@ -322,7 +328,7 @@
         + `<div class="tun me" data-comp="me" data-pick="${L.gear.pick}"><div class="who">${C.player(L.gear)}</div></div>`;
       if (ui.crewFx) {
         const el = box.querySelector(`[data-comp="${ui.crewFx.id}"]`);
-        if (el) el.classList.add(ui.crewFx.cls);
+        if (el && !reduceMotion()) el.classList.add(ui.crewFx.cls);
         ui.crewFx = null;
       }
     }
@@ -335,15 +341,27 @@
       if (c.id === "drill") el.classList.toggle("turbo", E.turboOn(game));
     }
     const me = box.querySelector('[data-comp="me"]');
-    if (me) me.classList.toggle("auto", !!game.tree.t6 && !L.cleared);
+    if (me) me.classList.toggle("auto", !!game.tree.t6 && !L.cleared && !L.atWall);
+  }
+  // 自分・仲間の場所（何度も測ると重いので、1フレームに 1回だけ測る）
+  function rectsOf(id) {
+    const now = performance.now();
+    if (!ui.rects || ui.rects.at !== ui.frameNo) {
+      const pit = $("#pit");
+      ui.rects = { at: ui.frameNo, pit: pit && pit.getBoundingClientRect(), who: {} };
+    }
+    if (!ui.rects.who[id]) {
+      const el = $(`#pit [data-comp="${id}"] .who`);
+      ui.rects.who[id] = el ? el.getBoundingClientRect() : null;
+    }
+    return { pr: ui.rects.pit, r: ui.rects.who[id], now };
   }
   // 掘った土のかけらを飛ばす（自分・仲間のまわりから）
   function dirt(id, n) {
     if (reduceMotion()) return;
-    const pit = $("#pit"), dbox = $("#dirtbox");
-    const el = pit && pit.querySelector(`[data-comp="${id}"] .who`);
-    if (!el || !dbox) return;
-    const pr = pit.getBoundingClientRect(), r = el.getBoundingClientRect();
+    const dbox = $("#dirtbox");
+    const { pr, r } = rectsOf(id);
+    if (!r || !pr || !dbox) return;
     const colors = { soil: "#8a6a4a", rock: "#9aa3ad", fossil: "#b8a8d0", crust: "#a08060", mantle: "#ffb060", outer: "#c8a8ff", inner: "#fff0a0" }[E.layerOf(game).id];
     for (let i = 0; i < n; i++) {
       if (dbox.childElementCount > 40) dbox.firstChild.remove();
@@ -443,13 +461,13 @@
         toast(`${f.icon} 化石を見つけた！ <b>${f.name}</b>（掘る力 +${Math.round(D.FOSSIL_BONUS * 100)}%）`);
         S.play("fossil");
       } else if (e.type === "autotap") {
-        const me = $('#pit [data-comp="me"]'), pit = $("#pit");
-        if (me && pit) {
-          const pr = pit.getBoundingClientRect(), r = me.getBoundingClientRect();
+        if (e.gain <= 0) continue;
+        const { pr, r } = rectsOf("me");
+        if (r && pr && (!reduceMotion() || e.crit)) {
           floatNum(r.left - pr.left + r.width * (0.3 + Math.random() * 0.4), r.top - pr.top + 4, `${e.crit ? "会心！ " : ""}+${M(e.gain)}`, e.crit ? "crit small" : "small");
           swingMe(); dirt("me", 2);
-          if (e.crit) S.play("crit");
         }
+        if (e.crit) S.play("crit");
       } else if (e.type === "ore") S.play("ore");
       else if (e.type === "wall") S.play("wall");
       else if (e.type === "clear") { save(); S.play("clear"); go("clear"); return; }
@@ -462,6 +480,7 @@
     if (!game || ui.view === "title" || document.hidden) return;
     const dt = Math.min(0.25, Math.max(0, (now - (ui.last || now)) / 1000));
     ui.last = now;
+    ui.frameNo = (ui.frameNo || 0) + 1;
     if (dt > 0) handleEvents(E.tick(game, dt));
     if (ui.view === "dig") { update(false); if (dt > 0) crewDirt(dt); }
     else if (ui.view === "rebirth" && $("#shardGain")) {
@@ -544,11 +563,20 @@
   function act(a) {
     switch (a) {
       case "new":
-        if (game) { ui.confirm = { text: "今のセーブを消して、はじめから始めますか？<br><small>スキルツリーや化石もすべて消えます。</small>", yes: "消して はじめから", run: startNew }; render(); return; }
+        if (game || unreadable) { ui.confirm = { text: `${game ? "今のセーブ" : "読みこめなかったセーブ"}を消して、はじめから始めますか？<br><small>スキルツリーや化石もすべて消えます。</small>`, yes: "消して はじめから", run: startNew }; render(); return; }
         startNew(); return;
       case "confirm-yes": { const f = ui.confirm && ui.confirm.run; ui.confirm = null; if (f) f(); else render(); return; }
       case "confirm-no": ui.confirm = null; render(); return;
-      case "continue": S.unlock(); ui.note = null; go(game.life.cleared ? "clear" : "dig"); return;
+      case "continue": {
+        S.unlock(); ui.note = null;
+        go(game.life.cleared ? "clear" : "dig");
+        if (game.migrated) {
+          delete game.migrated;
+          save();
+          banner("NEWS", "しくみが新しくなりました！", "仲間はレベルで強くなる・特技や装備も増えたよ");
+        }
+        return;
+      }
       case "sound": {
         S.setOn(!S.isOn()); S.unlock(); S.play("buy");
         if (ui.view === "dig") { const b = $(".hud [data-act=sound]"); if (b) b.textContent = S.isOn() ? "🔊" : "🔇"; } else render();

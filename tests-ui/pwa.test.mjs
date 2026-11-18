@@ -126,3 +126,18 @@ test("音はタイトルで消せて、その設定が残る。音ありで遊�
   await p.reload();
   assert.match(await p.$eval('[data-act="sound"]', (e) => e.textContent), /🔇/);
 });
+
+test("「動きを減らす」設定では、強化したときの光が残らない", async () => {
+  const p = await page();
+  await p.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "reduce" }]);
+  await p.goto(BASE);
+  const g = E.newGame({ seed: 2 }); g.life.money = 1e6;
+  await p.evaluate((s) => localStorage.setItem("horihori-tensei-v1", JSON.stringify(s)), { v: 1, game: g });
+  await p.reload();
+  await p.$eval('[data-act="continue"]', (e) => e.click());
+  await p.$eval('[data-tab="me"]', (e) => e.click());
+  await p.$eval('[data-gear="pick"]', (e) => e.click());
+  await new Promise((r) => setTimeout(r, 300));
+  const glow = await p.$eval('#pit [data-comp="me"]', (e) => getComputedStyle(e, "::before").content);
+  assert.ok(glow === "none" || glow === "normal", glow);
+});

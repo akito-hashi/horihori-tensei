@@ -1,14 +1,14 @@
 // ほりほり転生のキャラクター（SVG）。stage: 0=Lv1, 1=Lv10, 2=Lv25, 3=Lv50, 4=Lv100
 // 動く部品には class をつけている（.arm .drill .claw .beam .dirt）。CSS で動きをつける。
 (function (root) {
-  const metal = ["#9a6a3a", "#9aa3ad", "#7fa7d9", "#7ff0ff", "#ffd23a"]; // 木・鉄・鋼・ダイヤ・金
+  const metal = ["#9a6a3a", "#9aa3ad", "#7fa7d9", "#7ff0ff", "#d7b8ff", "#ffd23a"]; // 木・鉄・鋼・ダイヤ・ミスリル・流れ星（金）
   const glow = (on, col) => (on ? `<circle cx="50" cy="55" r="46" fill="${col}" opacity=".18"/><circle cx="50" cy="55" r="36" fill="${col}" opacity=".16"/>` : "");
   const sparkle = (on) => on ? `<g fill="#fff6c4"><path d="M14 20l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/><path d="M84 14l1.5 4 4 1.5-4 1.5-1.5 4-1.5-4-4-1.5 4-1.5z"/><path d="M88 70l1.5 3.5 3.5 1.5-3.5 1.5-1.5 3.5-1.5-3.5-3.5-1.5 3.5-1.5z"/></g>` : "";
   const crown = (on) => on ? `<path d="M37 12l5 8 8-10 8 10 5-8 2 14H35z" fill="#ffd23a" stroke="#b8860b" stroke-width="1.5"/>` : "";
 
   // 自分（タップで掘る子ども）。gear: { pick 0-4, glove 0-3, helmet 0-3, boots 0-3 }
   function player(g = {}) {
-    const pick = metal[g.pick || 0];
+    const pick = metal[Math.min(metal.length - 1, g.pick || 0)];
     const glove = ["#f2c9a0", "#e9e2d0", "#3fa0ff", "#ffd23a"][g.glove || 0];
     const boots = ["#6b4a2b", "#7a3b1a", "#2f6fd6", "#ffd23a"][g.boots || 0];
     const hel = g.helmet || 0;
@@ -16,7 +16,7 @@
       : `<path d="M28 36c0-16 44-16 44 0z" fill="${hel >= 3 ? "#ffd23a" : "#ffcf3a"}" stroke="#c79a1a" stroke-width="1.5"/><rect x="26" y="34" width="48" height="5" rx="2.5" fill="#e0a800"/>`
         + (hel >= 2 ? `<rect x="45" y="24" width="10" height="7" rx="2" fill="#555"/><circle cx="50" cy="27.5" r="3" fill="#fff6a0"/>` : "")
         + (hel >= 2 ? `<path class="beam" d="M50 27l-14-14h28z" fill="#fff6a0" opacity=".35"/>` : "");
-    return `<svg viewBox="0 0 100 100" class="ch player">${sparkle((g.pick || 0) >= 4)}
+    return `<svg viewBox="0 0 100 100" class="ch player">${sparkle((g.pick || 0) >= 5)}
       <ellipse cx="50" cy="94" rx="24" ry="4" fill="#000" opacity=".25"/>
       <rect x="38" y="78" width="9" height="14" rx="3" fill="#3a5a8a"/><rect x="53" y="78" width="9" height="14" rx="3" fill="#3a5a8a"/>
       <rect x="35" y="88" width="14" height="7" rx="3" fill="${boots}"/><rect x="51" y="88" width="14" height="7" rx="3" fill="${boots}"/>
@@ -54,7 +54,7 @@
 
   // ガンさん（ベテラン掘り師）
   function gan(s = 0) {
-    const pick = metal[Math.min(4, [1, 1, 2, 4, 4][s])];
+    const pick = metal[[1, 1, 2, 5, 5][s]];
     const shirt = s >= 3 ? "#ffd23a" : "#c8462a";
     return `<svg viewBox="0 0 100 100" class="ch gan">${glow(s >= 4, "#ffb000")}${sparkle(s >= 3)}
       <ellipse cx="50" cy="94" rx="24" ry="4" fill="#000" opacity=".25"/>
@@ -76,7 +76,7 @@
   // ドリルン（掘削ロボ）
   function drill(s = 0) {
     const shell = ["#c8d0d8", "#ffb02e", "#4f9de8", "#ffd23a", "#ffd23a"][s];
-    const bit = metal[[1, 1, 2, 3, 4][s]];
+    const bit = metal[[1, 1, 2, 3, 5][s]];
     return `<svg viewBox="0 0 100 100" class="ch drillun">${glow(s >= 4, "#7ff0ff")}${sparkle(s >= 3)}
       <ellipse cx="50" cy="94" rx="26" ry="4" fill="#000" opacity=".25"/>
       <rect x="30" y="82" width="40" height="10" rx="5" fill="#444"/><circle cx="36" cy="87" r="3.5" fill="#888"/><circle cx="50" cy="87" r="3.5" fill="#888"/><circle cx="64" cy="87" r="3.5" fill="#888"/>
@@ -110,4 +110,4 @@
   }
 
   root.Chars = { player, mog, gan, drill, soko };
-})(typeof self !== "undefined" ? self : this);
+})(typeof self !== "undefined" ? self : typeof module === "object" ? module.exports : this);

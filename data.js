@@ -74,7 +74,7 @@
   const TREE = [
     { id: "t1", branch: "tap", name: "強いつるはし", icon: "⛏️", cost: 1, tapMult: 3, desc: "タップ力 ×3" },
     { id: "t2", branch: "tap", name: "連打ボーナス", icon: "👆", cost: 3, desc: "1秒に 5回以上タップしている間 ×1.5" },
-    { id: "t6", branch: "tap", name: "オートタップ", icon: "🤖", cost: 8, desc: "自分が 1秒に 3回、自動でタップしてくれる。会心の一撃や連打ボーナスも出る" },
+    { id: "t6", branch: "tap", name: "オートタップ", icon: "🤖", cost: 8, desc: "自分が 1秒に 3回、自動でタップしてくれる。会心の一撃も出る。自分でもタップすると連打ボーナスが出やすい" },
     { id: "t3", branch: "tap", name: "会心の一撃", icon: "💥", cost: 12, desc: "タップの 10回に 1回が 10倍" },
     { id: "t4", branch: "tap", name: "仲間の力", icon: "🤝", cost: 25, desc: "タップに、仲間全員の毎秒の力の 5% が上乗せ" },
     { id: "t5", branch: "tap", name: "黄金のつるはし", icon: "🌟", cost: 60, tapMult: 5, desc: "タップ力 ×5" },

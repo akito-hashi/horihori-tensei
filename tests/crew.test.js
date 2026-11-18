@@ -24,7 +24,7 @@ test("仲間は 4人。モグは最初から、ガンさんは岩盤、ドリル
   assert.equal(E.isUnlocked(g, "soko"), true);
 });
 
-test("強化するとお金が減ってレベルが 1上がり、次の値段は 1.15倍。お金が足りないと強化できない", () => {
+test(`強化するとお金が減ってレベルが 1上がり、次の値段は ${D.COST_GROWTH}倍。お金が足りないと強化できない`, () => {
   const g = fresh();
   assert.equal(E.levelUp(g, "mog"), false);
   assert.equal(E.lv(g, "mog"), 0);
@@ -197,11 +197,83 @@ test("前のしくみ（仲間を何人もやとう）の古いセーブは、�
   };
   assert.equal(E.sanitize(old), true);
   assert.equal(old.v, 2);
-  assert.deepEqual(old.life.lv, { mog: 15, gan: 5, drill: 2 });
+  assert.deepEqual(Object.keys(old.life.lv).sort(), ["drill", "gan", "mog"], "いた仲間のぶんだけ仲間になっている");
+  for (const v of Object.values(old.life.lv)) assert.ok(Number.isInteger(v) && v >= 1);
   assert.equal(old.life.gear.pick, 2);
   assert.equal(old.life.gear.helmet, 1);
   assert.equal(old.life.owned, undefined);
   assert.equal(old.life.upgrades, undefined);
   assert.equal(old.shards, 20);
   assert.ok(old.tree.t1);
+});
+
+// 前のしくみでの、仲間たちの毎秒の力（置きかえで遅くならないかを比べるため）
+const OLD_OUT = { apprentice: 0.5, mole: 3, shovel: 20, jack: 120, tunnel: 800, machine: 6000, magma: 50000, chitei: 400000 };
+const OLD_HARD = [1.485, 5.94, 29.7, 74.25, 445.5, 4455, 6682.5];
+function oldSave(layer, depth, owned, extra = {}) {
+  return {
+    v: 1, rng: 5, lifeNo: 4, shards: 30, tree: { f1: true, ...(extra.tree || {}) }, fossils: {}, prevReach: {}, lives: [], clears: [], cleared: false, totalTime: 3600,
+    life: { depth, layer, money: 1e9, t: 600, reach: {}, taps: [], atWall: !!extra.atWall, cleared: false, boost: extra.boost || null, ore: null, owned, upgrades: extra.upgrades || {} },
+  };
+}
+const oldAuto = (o, up = {}) => Object.entries(o).reduce((a, [k, n]) => a + n * OLD_OUT[k] * (up["eq_" + k] ? 2 : 0 || 1), 0);
+
+test("古いセーブを置きかえても、いる地層で毎秒掘れる m（自動）は前より遅くならない", () => {
+  const cases = [
+    [1, 800, { apprentice: 20, mole: 15, shovel: 8 }],
+    [3, 20000, { apprentice: 40, mole: 35, shovel: 30, jack: 22, tunnel: 15, machine: 6 }, { upgrades: { eq_mole: true, eq_shovel: true } }],
+    [4, 600000, { apprentice: 60, mole: 55, shovel: 50, jack: 45, tunnel: 40, machine: 35, magma: 14 }, { tree: { suit: true }, upgrades: { eq_machine: true, eq_magma: true } }],
+    [5, 3200000, { apprentice: 60, mole: 60, shovel: 55, jack: 50, tunnel: 45, machine: 40, magma: 30, chitei: 8 }, { tree: { suit: true, drill: true, f5: true } }],
+  ];
+  for (const [layer, depth, owned, extra = {}] of cases) {
+    const s = oldSave(layer, depth, owned, extra);
+    const before = (oldAuto(owned, extra.upgrades) * 3) / (OLD_HARD[layer] * Math.pow(Math.max(1, depth / D.LAYERS[layer].from), D.LAYERS[layer].grow));
+    assert.equal(E.sanitize(s), true);
+    const after = E.autoSpeed(s);
+    assert.ok(after >= before * 0.95, `地層${layer}: 前 ${before.toFixed(1)} m/s → 後 ${after.toFixed(1)} m/s`);
+    assert.ok(after <= before * 3, `速くなりすぎない: ${before} → ${after}`);
+    assert.equal(s.migrated, true, "仕組みが変わったお知らせを出すための印");
+  }
+});
+
+test("古いセーブ：壁の前・ブースト中・地底人がいるセーブも、そのまま続きから遊べる", () => {
+  const s = oldSave(3, 35000, { apprentice: 5, chitei: 2 }, { atWall: true, tree: { f5: true }, boost: { mult: 7, until: 610, kind: "gold" } });
+  assert.equal(E.sanitize(s), true);
+  assert.equal(s.life.atWall, true);
+  assert.equal(s.life.boost.mult, 7);
+  assert.ok(E.lv(s, "soko") >= 2);
+  assert.ok(E.isUnlocked(s, "soko"));
+});
+
+test("仲間カードに出す速さは、スキルツリーや化石の倍率もこみ（全員の合計が本当の速さと一致）", () => {
+  const g = fresh();
+  g.life.layer = 2; g.life.lv = { mog: 40, gan: 30, drill: 12 };
+  g.tree = { f1: true, f3: true, f4: true }; g.fossils.acorn = { lifeNo: 1, depth: 30 };
+  const sum = D.COMPANIONS.reduce((a, c) => a + E.compShown(g, c.id), 0);
+  assert.ok(Math.abs(sum - E.autoPower(g)) < 1e-6 * E.autoPower(g));
+});
+
+test("オートタップ：会心も出る。壁で止まっているときは掘れない。転生するとためていた分はリセット", () => {
+  const g = fresh(9);
+  g.tree.t6 = true; g.tree.t3 = true;
+  let crits = 0;
+  for (let i = 0; i < 400; i++) for (const e of E.tick(g, 0.25)) if (e.type === "autotap" && e.crit) crits++;
+  assert.ok(crits > 10, String(crits));
+  const w = fresh();
+  w.tree.t6 = true; w.life.layer = 3; w.life.depth = 35000; w.life.atWall = true;
+  const evs = [];
+  for (let i = 0; i < 8; i++) evs.push(...E.tick(w, 0.25));
+  assert.equal(w.life.depth, 35000);
+  assert.ok(evs.filter((e) => e.type === "autotap").every((e) => e.gain === 0));
+  w.life.autoAcc = 0.9; w.life.depth = 50000; w.life.layer = 4; w.life.atWall = false;
+  E.rebirth(w);
+  assert.equal(w.life.autoAcc, 0);
+});
+
+test("キャラの絵：どの段階・どの装備でも色が抜けない（undefined や NaN が入らない）", () => {
+  const { Chars } = require("../chars.js");
+  const svgs = [];
+  for (let st = 0; st <= 4; st++) svgs.push(Chars.mog(st), Chars.gan(st), Chars.drill(st), Chars.soko(st));
+  for (let p = 0; p <= D.GEAR.pick.tiers.length; p++) for (let k = 0; k <= 3; k++) svgs.push(Chars.player({ pick: p, glove: k, helmet: k, boots: k }));
+  for (const s of svgs) assert.ok(!/undefined|NaN/.test(s), s.slice(0, 80));
 });

@@ -212,6 +212,7 @@ test("こわれたセーブでも、タイトルから新しく始められる",
   assert.equal(await screen(p), "title");
   assert.equal(await p.$('[data-act="continue"]'), null);
   await click(p, '[data-act="new"]');
+  await click(p, '[data-act="confirm-yes"]'); // 読めないセーブを消す前に確認が出る
   assert.equal(await screen(p), "dig");
   assert.deepEqual(p.errors, []);
 });
@@ -361,4 +362,42 @@ test("仲間の絵の上をタップしても、ちゃんと掘れる", async ()
   assert.ok(await p.$(".float"), "タップの数字が出る");
   await saveNow(p);
   assert.ok((await saved(p)).game.life.depth > before);
+});
+
+test("光る鉱石のブースト表示は上の段（HUD）に出て、仲間の顔にかからない", async () => {
+  const p = await open({ save: mk((g) => { g.life.lv = { mog: 30, gan: 20 }; g.life.layer = 1; g.life.depth = 500; g.life.boost = { mult: 7, until: 15, kind: "gold" }; }) });
+  await click(p, '[data-act="continue"]');
+  await p.waitForSelector("#boost");
+  assert.ok(await p.$(".hud #boost"), "ブーストは HUD の中");
+  const over = await p.evaluate(() => {
+    const b = document.querySelector("#boost").getBoundingClientRect();
+    return [...document.querySelectorAll("#pit .tun .who")].some((w) => { const r = w.getBoundingClientRect(); return r.top < b.bottom && r.bottom > b.top && r.left < b.right && r.right > b.left; });
+  });
+  assert.equal(over, false);
+});
+
+test("壁で止まっているときは、オートタップの数字（+0）が出ない", async () => {
+  const p = await open({ save: mk((g) => { g.tree.t6 = true; g.life.layer = 3; g.life.depth = 35000; g.life.atWall = true; }) });
+  await click(p, '[data-act="continue"]');
+  await wait(1200);
+  assert.equal(await p.$(".float"), null);
+});
+
+test("前のしくみのセーブで続きを始めると、しくみが新しくなったお知らせが 1回だけ出る", async () => {
+  const old = { v: 1, rng: 5, lifeNo: 2, shards: 3, tree: {}, fossils: {}, prevReach: {}, lives: [], clears: [], cleared: false, totalTime: 60,
+    life: { depth: 300, layer: 1, money: 100, t: 30, reach: {}, taps: [], atWall: false, cleared: false, boost: null, ore: null, owned: { apprentice: 5, mole: 3, shovel: 1 }, upgrades: { pick_iron: true } } };
+  const p = await open({ save: { v: 1, game: old } });
+  await click(p, '[data-act="continue"]');
+  assert.match(await text(p, "#banner"), /新しく/);
+  assert.ok(await p.$('#pit [data-comp="gan"]'));
+  await saveNow(p);
+  assert.ok(!(await saved(p)).game.migrated, "2回目は出ない");
+});
+
+test("読めないセーブがあるときも、「はじめから」は確認してから", async () => {
+  const p = await open();
+  await p.evaluate((k) => localStorage.setItem(k, JSON.stringify({ v: 1, game: { v: 9, life: {} } })), KEY);
+  await p.reload();
+  await click(p, '[data-act="new"]');
+  assert.ok(await p.$('[data-act="confirm-no"]'));
 });

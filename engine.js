@@ -98,6 +98,16 @@
   function autoPower(game) {
     return autoRaw(game) * boostMult(game);
   }
+  // 仲間カードに出す速さ：その仲間の力に、スキルツリー・化石・ブーストの倍率をかけたもの（全員の合計が本当の速さになる）
+  function sharedMult(game) {
+    let m = 1;
+    for (const nd of D.TREE) if (nd.autoMult && has(game, nd.id)) m *= nd.autoMult;
+    if (has(game, "f3")) m *= Math.pow(1.5, Math.floor(totalLv(game) / 100));
+    return m * fossilMult(game) * boostMult(game);
+  }
+  function compShown(game, id, power) {
+    return (power == null ? compPower(game, id) : power) * sharedMult(game);
+  }
   function critChance(game) {
     let c = has(game, "t3") ? 0.1 : 0;
     for (const k of D.SKILLS) if (k.crit && game.life.skills[k.id]) c += k.crit;
@@ -355,12 +365,34 @@
   }
 
   // ---- セーブの点検 ----
-  // 前のしくみ（仲間を何人もやとう）のセーブを、仲間のレベルと装備に置きかえる
+  // 前のしくみ（仲間を何人もやとう）のセーブを、仲間のレベルと装備に置きかえる。
+  // いる地層で毎秒掘れる m が前と同じくらいになるように、仲間ごとのレベルを決める（かたさの見直しも計算に入れる）
+  const OLD = {
+    out: { apprentice: 0.5, mole: 3, shovel: 20, jack: 120, tunnel: 800, machine: 6000, magma: 50000, chitei: 400000 },
+    group: { mog: ["apprentice", "mole"], gan: ["shovel", "jack"], drill: ["tunnel", "machine", "magma"], soko: ["chitei"] },
+    hard: [1.485, 5.94, 29.7, 74.25, 445.5, 4455, 6682.5],
+  };
+  function levelFor(id, target) {
+    for (let n = 1; n < 3000; n++) {
+      if (n * COMP[id].out * Math.pow(2, D.LV_MILESTONES.filter((m) => n >= m).length) >= target) return n;
+    }
+    return 3000;
+  }
   function migrateV1(game) {
     const L = game.life, o = L.owned && typeof L.owned === "object" ? L.owned : {}, u = L.upgrades && typeof L.upgrades === "object" ? L.upgrades : {};
     const n = (k) => (Number.isInteger(o[k]) && o[k] > 0 ? o[k] : 0);
-    const lvs = { mog: n("apprentice") + n("mole"), gan: n("shovel") + n("jack"), drill: n("tunnel") + n("machine") + n("magma"), soko: n("chitei") };
-    L.lv = Object.fromEntries(Object.entries(lvs).filter(([, v]) => v > 0));
+    const ratio = D.LAYERS[L.layer] ? D.LAYERS[L.layer].hard / OLD.hard[L.layer] : 1;
+    L.lv = {};
+    for (const [id, members] of Object.entries(OLD.group)) {
+      let p = 0;
+      for (const k of members) {
+        const c = n(k);
+        if (!c) continue;
+        p += c * OLD.out[k] * (u["eq_" + k] === true ? 2 : 1) * (game.tree && game.tree.f3 === true ? Math.pow(2, Math.floor(c / 25)) : 1);
+      }
+      if (p > 0) L.lv[id] = levelFor(id, p * ratio);
+    }
+    game.migrated = true;
     L.skills = {};
     L.gear = { pick: ["pick_iron", "pick_steel", "pick_diamond", "pick_mithril", "pick_star"].filter((k) => u[k] === true).length, glove: 0, helmet: u.light === true ? 1 : 0, boots: 0 };
     delete L.owned; delete L.upgrades;
@@ -426,7 +458,7 @@
 
   return {
     newGame, layerOf, tapPower, autoPower, autoSpeed, hardNow, hardAt, powerBetween, fossilMult, dig, tap, tick, tapOre,
-    lv, stage, compPower, turboOn, critChance, comboMult, oreFreq, totalLv,
+    lv, stage, compPower, compShown, sharedMult, turboOn, critChance, comboMult, oreFreq, totalLv,
     isUnlocked, levelCost, levelUp, skillCost, canBuySkill, buySkill, gearCost, buyGear, canUnlock, unlockNode, wallTool,
     rebirthShards, rebirth, sanitize, fmtNum, fmtDepth, rand,
   };
