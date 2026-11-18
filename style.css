@@ -52,24 +52,7 @@ button:disabled { cursor: not-allowed; }
 .gauge .w.ok { background: var(--green); }
 .gauge b { position: absolute; bottom: -22px; left: -5px; font-size: 14px; }
 .shaft { position: absolute; left: 50%; top: 0; width: 76px; height: 62%; transform: translateX(-50%); background: rgba(0,0,0,.4); border-radius: 0 0 34px 34px; }
-.miner { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); font-size: 48px; line-height: 1; }
-.miner.hit { animation: hit .12s; }
-/* 穴の中の仲間たち */
-#crew { position: absolute; top: 34px; bottom: 24px; left: 6px; right: 24px; z-index: 1; pointer-events: none;
-  display: grid; grid-template-columns: 1fr 84px 1fr; grid-template-rows: repeat(4, minmax(0, 1fr)); gap: 4px; }
-.crew-slot { display: flex; align-items: center; justify-content: center; gap: 1px; min-width: 0; padding: 0 4px; border-radius: 12px;
-  background: rgba(0, 0, 0, .28); box-shadow: inset 0 2px 6px rgba(0, 0, 0, .35); font-size: 20px; line-height: 1; }
-.crew-slot .cnt { font-size: 11px; color: var(--gold); margin-left: 3px; text-shadow: 0 1px 0 rgba(0,0,0,.6); white-space: nowrap; }
-.who { display: inline-block; }
-.who.worker { animation: work .55s ease-in-out infinite alternate; transform-origin: 50% 90%; }
-.who.machine { animation: rumble .18s linear infinite; }
-.crew-slot.new { animation: popin .5s cubic-bezier(.2, 1.6, .4, 1); }
-.crew-slot.more { animation: bump .3s; }
-@keyframes work { from { transform: rotate(-14deg) translateY(0); } to { transform: rotate(10deg) translateY(2px); } }
-@keyframes rumble { 0%, 100% { transform: translate(0, 0); } 25% { transform: translate(1px, -1px); } 50% { transform: translate(-1px, 1px); } 75% { transform: translate(1px, 1px); } }
-@keyframes popin { 0% { transform: scale(0) translateY(10px); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
-@keyframes bump { 50% { transform: scale(1.15); } }
-.taphint { position: absolute; left: 0; right: 0; bottom: 8px; text-align: center; font-size: 12px; opacity: .75; pointer-events: none; }
+.taphint { position: absolute; left: 0; right: 0; top: 36px; text-align: center; font-size: 12px; opacity: .75; pointer-events: none; }
 .float { position: absolute; pointer-events: none; font-family: "M PLUS Rounded 1c", sans-serif; font-weight: 800; font-size: 20px;
   text-shadow: 0 2px 0 rgba(0,0,0,.5); white-space: nowrap; transform: translate(-50%, -50%); animation: floatup .8s ease-out forwards; z-index: 3; }
 .float.crit { font-size: 32px; color: var(--gold); animation-duration: 1.1s; }
@@ -83,10 +66,10 @@ button:disabled { cursor: not-allowed; }
 #boost.rainbow { background: linear-gradient(90deg, #ff3d6e, #ffb000, #3fd3ff, #8f6bff); }
 .rays { position: absolute; left: 50%; top: 45%; width: 800px; height: 800px; margin: -400px 0 0 -400px; border-radius: 50%; pointer-events: none;
   background: repeating-conic-gradient(rgba(255, 220, 80, .2) 0 5deg, transparent 5deg 15deg); animation: spin 14s linear infinite; }
-#toasts { position: absolute; left: 10px; right: 26px; bottom: 28px; z-index: 5; display: flex; flex-direction: column-reverse; gap: 6px; pointer-events: none; }
-.toast { padding: 5px 10px; border-radius: 10px; background: rgba(10,6,2,.85); border: 1px solid var(--gold); font-size: 11px; line-height: 1.45; animation: slidein .25s; }
+#toasts { position: absolute; left: 8px; right: 24px; bottom: 4px; z-index: 5; display: flex; flex-direction: column; pointer-events: none; }
+.toast { padding: 3px 10px; border-radius: 999px; background: rgba(10,6,2,.78); border: 1px solid rgba(255,210,58,.7); font-size: 11px; line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; animation: slidein .25s; }
 .toast b { color: var(--gold); }
-.toast .x { float: right; color: var(--green); font-family: "Dela Gothic One", sans-serif; font-size: 16px; margin-left: 8px; }
+.toast .x { color: var(--green); font-family: "Dela Gothic One", sans-serif; font-size: 13px; margin-right: 6px; }
 #banner { position: absolute; left: 0; right: 0; top: 34%; z-index: 6; padding: 14px 0; text-align: center; pointer-events: none;
   background: linear-gradient(90deg, rgba(0,0,0,0), rgba(0,0,0,.78) 20%, rgba(0,0,0,.78) 80%, rgba(0,0,0,0)); animation: banner 2.6s forwards; }
 #banner .s { font-size: 12px; color: var(--gold); letter-spacing: .2em; }
@@ -208,3 +191,82 @@ nav.nav .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50
   .shardnum { font-size: 48px; }
   .gem { font-size: 72px; }
 }
+
+/* ===== 穴の中の自分と仲間 ===== */
+#crew, #dirtbox { position: absolute; inset: 0; pointer-events: none; }
+#crew { z-index: 1; }
+#dirtbox { z-index: 2; overflow: hidden; }
+.tun { position: absolute; width: 33%; height: 40%; display: flex; align-items: flex-end; justify-content: center; }
+.tun.lt { left: 1%; top: 15%; } .tun.rt { right: 7%; top: 15%; }
+.tun.lb { left: 1%; top: 57%; } .tun.rb { right: 7%; top: 57%; }
+.tun.me { left: 50%; bottom: 0; width: 34%; height: 52%; transform: translateX(-50%); }
+.tun .hole { position: absolute; left: -12%; right: -12%; bottom: 0; height: 78%; border-radius: 50%; background: rgba(0, 0, 0, .38); box-shadow: inset 0 6px 12px rgba(0, 0, 0, .5); }
+.tun .who { position: relative; height: 100%; aspect-ratio: 1; }
+.tun .who svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.lvtag { position: absolute; bottom: -2px; left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: 10px; padding: 1px 7px; border-radius: 999px; background: rgba(0, 0, 0, .65); color: var(--gold); }
+.ch g { transform-box: view-box; }
+/* モグ：両手のツメで土をかき出す */
+.ch.mog .cl-l { animation: scratchL .32s ease-in-out infinite alternate; }
+.ch.mog .cl-r { animation: scratchR .32s ease-in-out infinite alternate; animation-delay: -.16s; }
+.ch.mog { animation: hop .64s ease-in-out infinite; }
+@keyframes scratchL { from { transform: rotate(18deg) translateY(-2px); } to { transform: rotate(-22deg) translateY(3px); } }
+@keyframes scratchR { from { transform: rotate(-18deg) translateY(-2px); } to { transform: rotate(22deg) translateY(3px); } }
+@keyframes hop { 50% { transform: translateY(-3%); } }
+/* ガンさん：つるはしを振りかぶって振り下ろす */
+.ch.gan .swing { animation: ganSwing 1s cubic-bezier(.5, 0, .2, 1) infinite; }
+@keyframes ganSwing { 0% { transform: rotate(-55deg); } 55% { transform: rotate(-60deg); } 72% { transform: rotate(18deg); } 80% { transform: rotate(12deg); } 100% { transform: rotate(-55deg); } }
+/* ドリルン：ドリルが回り、体がふるえる */
+.ch.drillun .drill { animation: drillSpin .14s linear infinite; }
+.ch.drillun { animation: rumble .12s linear infinite; }
+.tun.turbo .ch.drillun .drill { animation-duration: .05s; }
+.tun.turbo .ch.drillun { animation-duration: .05s; filter: drop-shadow(0 0 10px #7ff0ff); }
+.tun.turbo::after { content: "ターボ！"; position: absolute; top: -4px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 900; color: #7ff0ff; text-shadow: 0 0 6px #000; }
+@keyframes drillSpin { 0% { transform: scaleY(1); } 50% { transform: scaleY(-1); } 100% { transform: scaleY(1); } }
+@keyframes rumble { 25% { transform: translate(1%, -1%); } 50% { transform: translate(-1%, 1%); } 75% { transform: translate(1%, 1%); } }
+/* ソコ：ふしぎな光が明滅する */
+.ch.soko .beam { animation: beam .7s ease-in-out infinite alternate; }
+.ch.soko .orb { animation: orb .35s ease-in-out infinite alternate; }
+.ch.soko { animation: float 2s ease-in-out infinite; }
+@keyframes beam { from { opacity: .25; } to { opacity: .95; } }
+@keyframes orb { from { r: 3; } to { r: 5.5; } }
+@keyframes float { 50% { transform: translateY(-4%); } }
+/* 自分：タップで振り下ろす。オートタップ中はずっと振る */
+.tun.me .arm { transform: rotate(-35deg); }
+.tun.me.swing .arm { animation: meSwing .22s ease-out; }
+.tun.me.auto .arm { animation: meSwing .333s ease-in-out infinite; }
+.tun.me.auto::after { content: "オート"; position: absolute; top: 2%; left: -8%; font-size: 10px; font-weight: 900; padding: 1px 6px; border-radius: 999px; background: #ff6ad5; color: #fff; }
+@keyframes meSwing { 0% { transform: rotate(-60deg); } 55% { transform: rotate(25deg); } 100% { transform: rotate(-35deg); } }
+/* 登場・変身・強化 */
+.tun.join .who { animation: joinIn .7s cubic-bezier(.2, 1.6, .4, 1); }
+.tun.transform .who { animation: transform 1s ease-out; }
+.tun.transform::before { content: ""; position: absolute; inset: -20%; border-radius: 50%; background: radial-gradient(circle, rgba(255,246,180,.95), rgba(255,210,58,0) 70%); animation: flash 1s ease-out forwards; }
+.tun.bump .who { animation: bump .25s; }
+@keyframes joinIn { from { transform: translateY(60%) scale(.3); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes transform { 0% { transform: scale(1); filter: brightness(3); } 30% { transform: scale(1.35) rotate(-6deg); filter: brightness(2); } 100% { transform: none; filter: none; } }
+@keyframes flash { from { opacity: 1; transform: scale(.4); } to { opacity: 0; transform: scale(1.4); } }
+@keyframes bump { 50% { transform: scale(1.12); } }
+/* 土のかけら */
+.dirt { position: absolute; width: 7px; height: 7px; border-radius: 2px; animation: dirt .7s ease-out forwards; }
+@keyframes dirt { 0% { transform: translate(0, 0) rotate(0); opacity: 1; } 60% { opacity: 1; } 100% { transform: translate(var(--dx), calc(var(--dy) * -0.2)) rotate(220deg); opacity: 0; } }
+.dirt { animation-name: dirtArc; }
+@keyframes dirtArc { 0% { transform: translate(0, 0); opacity: 1; } 45% { transform: translate(calc(var(--dx) * .6), var(--dy)); } 100% { transform: translate(var(--dx), 18px) rotate(240deg); opacity: 0; } }
+.float.small { font-size: 15px; }
+
+/* ===== お店：仲間カードと自分の装備 ===== */
+.cc, .gr { display: grid; grid-template-columns: 46px 1fr auto; gap: 8px; align-items: center; padding: 5px 8px; border-radius: 12px; background: rgba(255,255,255,.06); border: 1px solid var(--line); font-size: 12px; }
+.cc .pic { width: 46px; height: 46px; display: grid; place-items: center; font-size: 24px; } .cc .pic svg { width: 46px; height: 46px; }
+.cc .info, .gr .info { min-width: 0; } .cc b, .gr b { font-size: 13px; } .cc small, .gr small { display: block; opacity: .75; font-size: 10px; line-height: 1.4; }
+.cc.lock { opacity: .45; }
+.cc .bar { height: 4px; border-radius: 2px; background: rgba(255,255,255,.12); margin-top: 3px; overflow: hidden; } .cc .bar i { display: block; height: 100%; background: linear-gradient(90deg, #ff9a3d, #ffd23a); }
+.sks { display: flex; gap: 3px; margin-top: 4px; flex-wrap: wrap; }
+.sk { font-size: 9px; padding: 2px 6px; border-radius: 999px; background: rgba(255,255,255,.08); color: rgba(255,255,255,.6); white-space: nowrap; }
+.sk.on { background: var(--gold); color: #3a1d00; }
+.sk.can { background: rgba(143,255,176,.15); color: #fff; border: 1px solid var(--green); }
+.sk.can.poor { border-color: rgba(255,255,255,.25); color: rgba(255,255,255,.6); }
+.cc .cost, .gr .cost { text-align: center; font-size: 12px; color: #3a1d00; background: linear-gradient(180deg, var(--gold), var(--gold2)); padding: 5px 8px; border-radius: 10px; min-width: 70px; }
+.cc .cost i, .gr .cost i { display: block; font-style: normal; font-size: 10px; }
+.cc .cost.poor, .gr .cost.poor { background: rgba(255,255,255,.12); color: #bbb; }
+.cc.lock .cost, .gr .cost.done { background: rgba(255,255,255,.1); color: #bbb; }
+.gr .ic { font-size: 24px; text-align: center; }
+.pips { display: inline-flex; gap: 3px; margin-left: 6px; vertical-align: middle; } .pips i { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,.18); } .pips i.on { background: var(--gold); }
+.shop { gap: 5px; }

@@ -74,13 +74,13 @@ test("サービスワーカーが保存するファイルは、すべて実在�
   const files = [...sw.matchAll(/"\.\/([^"]*)"/g)].map((m) => m[1]).filter(Boolean);
   assert.ok(files.length >= 6);
   for (const f of files) assert.ok(fs.existsSync(path.join(ROOT, f)), f);
-  for (const f of ["index.html", "style.css", "data.js", "engine.js", "app.js", "sfx.js"]) assert.ok(files.includes(f), `${f} が sw.js にない`);
+  for (const f of ["index.html", "style.css", "data.js", "engine.js", "chars.js", "app.js", "sfx.js"]) assert.ok(files.includes(f), `${f} が sw.js にない`);
 });
 
 function clearSave() {
   const g = E.newGame({ seed: 5 });
   for (const id of ["suit", "drill", "starpick", "f5"]) g.tree[id] = true;
-  g.life.layer = 6; g.life.depth = 6371000 - 20; g.life.owned.chitei = 3;
+  g.life.layer = 6; g.life.depth = 6371000 - 20; g.life.lv.soko = 3;
   return { v: 1, game: g };
 }
 async function toClear(p) {
@@ -116,7 +116,7 @@ test("音はタイトルで消せて、その設定が残る。音ありで遊�
   await p.$eval('[data-act="new"]', (e) => e.click());
   const box = await (await p.$("#pit")).boundingBox();
   for (let i = 0; i < 40; i++) await p.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
-  await p.$eval('[data-buy="apprentice"]', (e) => e.click());
+  await p.$eval('[data-lvup="mog"]', (e) => e.click());
   await new Promise((r) => setTimeout(r, 500));
   assert.deepEqual(p.errors, []);
   await p.goto(BASE);

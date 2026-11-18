@@ -2,6 +2,7 @@
 (function () {
   "use strict";
   const D = window.GameData, E = window.Engine;
+  const C = window.Chars;
   const S = window.Sfx || { play() {}, setOn() {}, isOn: () => false, unlock() {} };
   const KEY = "horihori-tensei-v1";
   const app = document.getElementById("app");
@@ -74,7 +75,7 @@
     app.innerHTML = VIEWS[ui.view]();
     if (ui.confirm) app.insertAdjacentHTML("beforeend", `<div id="confirm" role="dialog" aria-modal="true"><div class="card">${ui.confirm.text}</div>
       <button class="btn" data-act="confirm-yes">${ui.confirm.yes}</button><button class="btn dark" data-act="confirm-no">やめる</button></div>`);
-    if (ui.view === "dig") { ui.crewSig = null; ui.crewPrev = null; update(true); const p = ui.pending; ui.pending = []; p.forEach(toast); }
+    if (ui.view === "dig") { ui.crewSig = null; update(true); const p = ui.pending; ui.pending = []; if (p.length) toast(p[p.length - 1]); }
     if (ui.view !== "clear") document.querySelectorAll(".confetti").forEach((c) => c.remove());
     running();
   }
@@ -109,13 +110,14 @@
         <section id="pit" class="L-${E.layerOf(game).id}" tabindex="0" role="button" aria-label="タップで掘る">
           <span class="chip layerchip" id="layerchip"></span>
           <div class="gauge" aria-hidden="true"><i id="gdot"></i>${marks}<b>💎</b></div>
-          <div class="shaft" aria-hidden="true"><div class="miner" id="miner">⛏️</div></div>
+          <div class="shaft" aria-hidden="true"></div>
           <div id="crew" aria-hidden="true"></div>
-          <div class="taphint">タップで掘る！</div>
+          <div id="dirtbox" aria-hidden="true"></div>
+          ${game.lifeNo === 1 && L.depth < 5 ? '<div class="taphint" id="taphint">タップで掘る！</div>' : ""}
           <div id="toasts" aria-live="polite"></div>
         </section>
         <section class="dock">
-          <div class="tabs"><button data-tab="friends" aria-pressed="${ui.tab === "friends"}">仲間</button><button data-tab="tools" aria-pressed="${ui.tab === "tools"}">道具</button></div>
+          <div class="tabs"><button data-tab="friends" aria-pressed="${ui.tab === "friends"}">仲間</button><button data-tab="me" aria-pressed="${ui.tab === "me"}">自分</button></div>
           <div class="shop" id="shop"></div>
         </section>${navHtml()}`;
     },
@@ -210,29 +212,51 @@
   };
 
   // ---- 掘る画面の数字・お店を毎フレーム更新 ----
-  function shopItems() {
+  const COMPS = D.COMPANIONS;
+  const COMP = Object.fromEntries(COMPS.map((c) => [c.id, c]));
+  const PIC = { mog: C.mog, gan: C.gan, drill: C.drill, soko: C.soko };
+  const meGear = () => game.life.gear;
+  const perSec = (p) => (p / E.hardNow(game) < 0.05 ? "0.1 m 未満" : M(p / E.hardNow(game)));
+  function nextMilestone(n) {
+    const next = D.LV_MILESTONES.find((m) => m > n);
+    const prev = [0, ...D.LV_MILESTONES].filter((m) => m <= n).pop();
+    return { next, prev, transform: next != null && D.LV_MILESTONES.indexOf(next) < 4 };
+  }
+  function compCard(c) {
     const L = game.life;
-    if (ui.tab === "friends") {
-      return D.BUILDINGS.filter((b) => !b.node || game.tree[b.node]).map((b) => {
-        if (!E.isUnlocked(game, b.id)) {
-          const layer = D.LAYERS.find((l) => l.id === b.layer);
-          return { key: "L" + b.id, html: `<div class="it lock"><span class="ic" aria-hidden="true">❔</span><div><b>？？？</b><small>${layer.name}で解放</small></div><span class="cost">🔒</span></div>` };
-        }
-        const n = L.owned[b.id] || 0;
-        const each = E.buildingPower({ ...game, life: { ...L, owned: { [b.id]: 1 } } }, b.id) / E.hardNow(game);
-        return { key: b.id + n, cost: E.buildingCost(game, b.id),
-          html: `<button class="it" data-buy="${b.id}"><span class="ic" aria-hidden="true">${b.icon}</span><div><b>${b.name} ×${n}</b><small>1${b.id === "mole" ? "匹" : b.id === "magma" ? "隻" : ["shovel", "machine"].includes(b.id) ? "台" : b.id === "jack" || b.id === "tunnel" ? "組" : "人"}で 毎秒 +${each < 0.05 ? "0.1 m 未満" : M(each)}</small></div>
-            <span class="cost num" data-cost>${N(E.buildingCost(game, b.id))} 💰<i>${b.verb}</i></span></button>` };
-      });
-    }
-    return D.UPGRADES.filter((u) => {
-      if (L.upgrades[u.id]) return false;
-      if (u.kind === "pick") return E.canBuyUpgrade(game, u.id);
-      if (u.kind === "equip") return E.isUnlocked(game, u.building) && (L.owned[u.building] || 0) >= u.need;
-      return true;
-    }).map((u) => ({ key: u.id, cost: u.cost,
-      html: `<button class="it" data-upg="${u.id}"><span class="ic" aria-hidden="true">${u.kind === "pick" ? "⛏️" : u.kind === "light" ? "🔦" : "🎁"}</span><div><b>${u.name}</b><small>${u.desc}</small></div>
-        <span class="cost num" data-cost>${N(u.cost)} 💰<i>強化</i></span></button>` }));
+    if (c.node && !game.tree[c.node]) return `<div class="cc lock"><div class="pic">❔</div><div class="info"><b>？？？</b><small>スキルツリー「${NODE[c.node].name}」で仲間になる</small></div><span class="cost">🔒</span></div>`;
+    if (!E.isUnlocked(game, c.id)) return `<div class="cc lock"><div class="pic">❔</div><div class="info"><b>？？？</b><small>${D.LAYERS.find((l) => l.id === c.layer).name}で仲間になる</small></div><span class="cost">🔒</span></div>`;
+    const n = E.lv(game, c.id), st = Math.max(0, E.stage(game, c.id));
+    const ms = nextMilestone(n);
+    const pct = ms.next ? Math.round(((n - ms.prev) / (ms.next - ms.prev)) * 100) : 100;
+    const cost = E.levelCost(game, c.id);
+    const sks = D.SKILLS.filter((k) => k.comp === c.id).map((k) => {
+      const have = !!L.skills[k.id], can = E.canBuySkill(game, k.id), price = E.skillCost(k.id);
+      const label = have ? `✓ ${k.name}` : can ? `${k.name} ${N(price)}💰` : `Lv.${k.need} ${k.name}`;
+      return `<button class="sk ${have ? "on" : can ? "can" : ""}" data-skill="${k.id}" ${have || !can ? "disabled" : ""} ${can && !have ? `data-price="${price}"` : ""} title="${k.desc}" aria-label="${k.name}：${k.desc}">${label}</button>`;
+    }).join("");
+    const each = n ? E.compPower(game, c.id) : c.out;
+    return `<div class="cc" data-card="${c.id}"><div class="pic">${PIC[c.id](st)}</div>
+      <div class="info"><b>${c.name} <span class="num">Lv.${n}</span></b>
+        <small>${n ? `毎秒 +${perSec(each)}` : `${c.kind}・仲間にすると 毎秒 +${perSec(c.out)}`}${ms.next ? ` ・ あと${ms.next - n}で${ms.transform ? "変身！" : "パワー×2"}` : ""}</small>
+        <div class="bar"><i style="width:${pct}%"></i></div><div class="sks">${sks}</div></div>
+      <button class="cost num" data-lvup="${c.id}" data-price="${cost}">${N(cost)} 💰<i>${n ? "強化" : "仲間にする"}</i></button></div>`;
+  }
+  function gearRow(line) {
+    const g = D.GEAR[line], have = meGear()[line], cost = E.gearCost(game, line);
+    const pips = g.tiers.map((_, k) => `<i class="${k < have ? "on" : ""}"></i>`).join("");
+    const next = g.tiers[have];
+    return `<div class="gr"><span class="ic" aria-hidden="true">${g.icon}</span><div class="info"><b>${g.name}<span class="pips">${pips}</span></b>
+      <small>${next ? `次：${next.name}（${next.desc}）` : "最高の段階！"}</small></div>
+      ${cost == null ? `<span class="cost done">最大</span>` : `<button class="cost num" data-gear="${line}" data-price="${cost}">${N(cost)} 💰<i>強化</i></button>`}</div>`;
+  }
+  function shopSig() {
+    const L = game.life;
+    return [ui.tab, Math.round(Math.log10(E.hardNow(game)) * 20), JSON.stringify(L.lv), Object.keys(L.skills).join(), JSON.stringify(L.gear),
+      COMPS.map((c) => E.isUnlocked(game, c.id) ? 1 : 0).join(""), game.tree.f5 ? 1 : 0].join("|");
+  }
+  function shopHtml() {
+    return ui.tab === "me" ? Object.keys(D.GEAR).map(gearRow).join("") : COMPS.map(compCard).join("");
   }
 
   function update(force) {
@@ -252,17 +276,10 @@
     $("#gdot").style.top = (gaugePos(L.depth) * 100).toFixed(2) + "%";
     drawCrew();
     // お店：中身が変わったときだけ作り直す
-    const items = shopItems();
-    const sig = ui.tab + Math.round(Math.log10(E.hardNow(game)) * 20) + items.map((i) => i.key).join("|");
+    const sig = shopSig();
     const shop = $("#shop");
-    if (force || sig !== ui.shopSig) {
-      ui.shopSig = sig;
-      shop.innerHTML = items.length ? items.map((i) => i.html).join("") : `<div class="empty">いま買える道具はない。仲間を 10人そろえると装備が出るよ</div>`;
-    }
-    shop.querySelectorAll("[data-buy],[data-upg]").forEach((el, i) => {
-      const it = items.filter((x) => x.cost != null)[i];
-      if (it) el.classList.toggle("poor", L.money < it.cost);
-    });
+    if (force || sig !== ui.shopSig) { ui.shopSig = sig; shop.innerHTML = shopHtml(); }
+    shop.querySelectorAll("[data-price]").forEach((el) => el.classList.toggle("poor", L.money < +el.dataset.price));
     // 光る鉱石
     const ore = $("#ore");
     if (L.ore && L.ore.shown && !ore) {
@@ -290,25 +307,72 @@
     } else if (!tool && wall && !L.cleared) { wall.remove(); const wb = $("#wallband"); if (wb) wb.remove(); }
   }
 
-  // ---- 穴の中の仲間たち（やとった仲間・機械が掘っている姿） ----
-  const MACHINES = new Set(["shovel", "jack", "machine", "magma"]);
+  // ---- 穴の中の仲間たち（自分と仲間 4人が掘っている姿） ----
+  const SLOT = { mog: "lt", gan: "rt", drill: "lb", soko: "rb" };
   function drawCrew() {
     const box = $("#crew");
     if (!box) return;
-    const owned = game.life.owned;
-    const sig = D.BUILDINGS.map((b) => owned[b.id] || 0).join(",");
-    if (sig === ui.crewSig) return;
-    const before = ui.crewPrev || {};
-    ui.crewSig = sig;
-    box.innerHTML = D.BUILDINGS.map((b, i) => {
-      const n = owned[b.id] || 0;
-      if (!n) return "";
-      const was = before[b.id] || 0;
-      const anim = was === 0 && ui.crewPrev ? "new" : n > was && ui.crewPrev ? "more" : "";
-      const who = Array.from({ length: Math.min(3, n) }, (_, k) => `<span class="who ${MACHINES.has(b.id) ? "machine" : "worker"}" style="animation-delay:${(-(i * 0.17 + k * 0.29)).toFixed(2)}s">${b.icon}</span>`).join("");
-      return `<div class="crew-slot ${anim}" data-crew="${b.id}" style="grid-column:${i % 2 ? 3 : 1};grid-row:${Math.floor(i / 2) + 1}">${who}<b class="cnt num">×${N(n)}</b></div>`;
-    }).join("");
-    ui.crewPrev = { ...owned };
+    const L = game.life;
+    const members = COMPS.filter((c) => E.lv(game, c.id) > 0);
+    const sig = members.map((c) => c.id + E.stage(game, c.id)).join(",") + "|" + JSON.stringify(L.gear);
+    if (sig !== ui.crewSig) {
+      ui.crewSig = sig;
+      box.innerHTML = members.map((c) => `<div class="tun ${SLOT[c.id]}" data-comp="${c.id}" data-stage="${E.stage(game, c.id)}"><div class="hole"></div>
+          <div class="who">${PIC[c.id](E.stage(game, c.id))}</div><span class="lvtag num" data-lvtag>${c.name} Lv.${E.lv(game, c.id)}</span></div>`).join("")
+        + `<div class="tun me" data-comp="me" data-pick="${L.gear.pick}"><div class="who">${C.player(L.gear)}</div></div>`;
+      if (ui.crewFx) {
+        const el = box.querySelector(`[data-comp="${ui.crewFx.id}"]`);
+        if (el) el.classList.add(ui.crewFx.cls);
+        ui.crewFx = null;
+      }
+    }
+    for (const c of members) {
+      const el = box.querySelector(`[data-comp="${c.id}"]`);
+      if (!el) continue;
+      const tag = el.querySelector("[data-lvtag]");
+      const txt = `${c.name} Lv.${E.lv(game, c.id)}`;
+      if (tag.textContent !== txt) tag.textContent = txt;
+      if (c.id === "drill") el.classList.toggle("turbo", E.turboOn(game));
+    }
+    const me = box.querySelector('[data-comp="me"]');
+    if (me) me.classList.toggle("auto", !!game.tree.t6 && !L.cleared);
+  }
+  // 掘った土のかけらを飛ばす（自分・仲間のまわりから）
+  function dirt(id, n) {
+    if (reduceMotion()) return;
+    const pit = $("#pit"), dbox = $("#dirtbox");
+    const el = pit && pit.querySelector(`[data-comp="${id}"] .who`);
+    if (!el || !dbox) return;
+    const pr = pit.getBoundingClientRect(), r = el.getBoundingClientRect();
+    const colors = { soil: "#8a6a4a", rock: "#9aa3ad", fossil: "#b8a8d0", crust: "#a08060", mantle: "#ffb060", outer: "#c8a8ff", inner: "#fff0a0" }[E.layerOf(game).id];
+    for (let i = 0; i < n; i++) {
+      if (dbox.childElementCount > 40) dbox.firstChild.remove();
+      const d = document.createElement("i");
+      d.className = "dirt";
+      const fromRight = id === "me" ? Math.random() < 0.5 : SLOT[id][0] === "l";
+      d.style.left = (r.left - pr.left + r.width * (fromRight ? 0.75 : 0.25)) + "px";
+      d.style.top = (r.top - pr.top + r.height * 0.8) + "px";
+      d.style.background = colors;
+      d.style.setProperty("--dx", ((fromRight ? 1 : -1) * (14 + Math.random() * 30)).toFixed(0) + "px");
+      d.style.setProperty("--dy", (-(18 + Math.random() * 34)).toFixed(0) + "px");
+      dbox.appendChild(d);
+      setTimeout(() => d.remove(), 700);
+    }
+  }
+  function swingMe() {
+    const me = $('#pit [data-comp="me"]');
+    if (!me || reduceMotion()) return;
+    me.classList.remove("swing"); void me.offsetWidth; me.classList.add("swing");
+  }
+  function crewDirt(dt) {
+    ui.dirtAcc = ui.dirtAcc || {};
+    for (const c of COMPS) {
+      const n = E.lv(game, c.id);
+      if (!n || game.life.atWall || game.life.cleared) continue;
+      const rate = 1.2 + E.stage(game, c.id) * 0.6 + (c.id === "drill" && E.turboOn(game) ? 4 : 0);
+      ui.dirtAcc[c.id] = (ui.dirtAcc[c.id] || 0) + rate * dt;
+      if (ui.dirtAcc[c.id] >= 1) { const k = Math.floor(ui.dirtAcc[c.id]); ui.dirtAcc[c.id] -= k; dirt(c.id, Math.min(3, k)); }
+    }
   }
 
   // ---- 演出 ----
@@ -323,15 +387,16 @@
     pit.appendChild(el);
     setTimeout(() => el.remove(), 1100);
   }
+  // 知らせは穴の下に 1行だけ（キャラを隠さないように）。続けて来たら新しいほうを出す
   function toast(html) {
     const box = $("#toasts");
     if (!box) { ui.pending.push(html); ui.pending = ui.pending.slice(-2); return; }
     const el = document.createElement("div");
     el.className = "toast";
     el.innerHTML = html;
-    box.prepend(el);
-    while (box.children.length > 2) box.lastChild.remove();
-    setTimeout(() => el.remove(), 4000);
+    box.replaceChildren(el);
+    clearTimeout(ui.toastTimer);
+    ui.toastTimer = setTimeout(() => el.remove(), 3000);
   }
   function banner(s, b, d) {
     const pit = $("#pit");
@@ -359,10 +424,10 @@
   function milestoneHtml(e) {
     const layer = LAYER_AT[e.depth];
     const what = layer ? `${layer.icon} ${layer.name}に到達` : `📍 ${M(e.depth)} 到達`;
-    if (e.prev == null) return `${what}<br>${game.lifeNo === 1 ? `<b class="num">${mmss(e.t)}</b>` : "初めて来た！"}`;
+    if (e.prev == null) return `${what} ${game.lifeNo === 1 ? `<b class="num">${mmss(e.t)}</b>` : "初めて来た！"}`;
     const t = Math.max(e.t, 0.5);
     const x = e.prev / t;
-    return `${x >= 1.1 ? `<span class="x">${x >= 10 ? Math.round(x) : x.toFixed(1)}倍速！</span>` : ""}${what}<br>前世 <b class="num">${mmss(e.prev)}</b> → 今回 <b class="num">${mmss(e.t)}</b>`;
+    return `${x >= 1.1 ? `<span class="x">${x >= 10 ? Math.round(x) : x.toFixed(1)}倍速！</span>` : ""}${what} 前世<b class="num">${mmss(e.prev)}</b>→<b class="num">${mmss(e.t)}</b>`;
   }
 
   function handleEvents(evs) {
@@ -375,8 +440,16 @@
         if (e.depth < D.GOAL) { toast(milestoneHtml(e)); if (e.prev != null && e.prev > e.t) S.play("fast"); }
       } else if (e.type === "fossil") {
         const f = D.FOSSILS.find((x) => x.id === e.id);
-        toast(`${f.icon} 化石を見つけた！ <b>${f.name}</b><br>掘る力 +${Math.round(D.FOSSIL_BONUS * 100)}%（ずっと続く）`);
+        toast(`${f.icon} 化石を見つけた！ <b>${f.name}</b>（掘る力 +${Math.round(D.FOSSIL_BONUS * 100)}%）`);
         S.play("fossil");
+      } else if (e.type === "autotap") {
+        const me = $('#pit [data-comp="me"]'), pit = $("#pit");
+        if (me && pit) {
+          const pr = pit.getBoundingClientRect(), r = me.getBoundingClientRect();
+          floatNum(r.left - pr.left + r.width * (0.3 + Math.random() * 0.4), r.top - pr.top + 4, `${e.crit ? "会心！ " : ""}+${M(e.gain)}`, e.crit ? "crit small" : "small");
+          swingMe(); dirt("me", 2);
+          if (e.crit) S.play("crit");
+        }
       } else if (e.type === "ore") S.play("ore");
       else if (e.type === "wall") S.play("wall");
       else if (e.type === "clear") { save(); S.play("clear"); go("clear"); return; }
@@ -390,7 +463,7 @@
     const dt = Math.min(0.25, Math.max(0, (now - (ui.last || now)) / 1000));
     ui.last = now;
     if (dt > 0) handleEvents(E.tick(game, dt));
-    if (ui.view === "dig") update(false);
+    if (ui.view === "dig") { update(false); if (dt > 0) crewDirt(dt); }
     else if (ui.view === "rebirth" && $("#shardGain")) {
       $("#shardGain").textContent = `✦ ${N(E.rebirthShards(game))}`;
       $("#rbDepth").textContent = M(game.life.depth);
@@ -412,8 +485,8 @@
     const x = ev && ev.clientX != null ? ev.clientX - box.left : box.width / 2;
     const y = ev && ev.clientY != null ? ev.clientY - box.top : box.height / 2;
     floatNum(x + (Math.random() - 0.5) * 30, y - 10, `${r.crit ? "会心！ " : ""}+${M(r.gain)}`, r.crit ? "crit" : r.combo ? "combo" : "");
-    const miner = $("#miner");
-    if (miner && !reduceMotion()) { miner.classList.remove("hit"); void miner.offsetWidth; miner.classList.add("hit"); }
+    swingMe(); dirt("me", r.crit ? 6 : 3);
+    const hint = $("#taphint"); if (hint && game.life.depth >= 5) hint.remove();
     if (r.crit && !reduceMotion()) { pit.classList.remove("shake"); void pit.offsetWidth; pit.classList.add("shake"); }
     S.play(r.crit ? "crit" : "tap");
     handleEvents(r.events);
@@ -441,8 +514,21 @@
       update(false);
       return;
     }
-    if (d.buy) { if (E.buy(game, d.buy)) { S.play("buy"); save(); } update(true); return; }
-    if (d.upg) { if (E.buyUpgrade(game, d.upg)) { S.play("buy"); save(); } update(true); return; }
+    if (d.lvup) {
+      const r = E.levelUp(game, d.lvup);
+      if (r) {
+        const c = COMP[d.lvup];
+        save();
+        if (r.joined) { ui.crewFx = { id: c.id, cls: "join" }; banner("NEW FRIEND", `${c.name}が仲間になった！`, `${c.kind}・いっしょに掘ってくれる`); S.play("unlock"); }
+        else if (r.transformed) { ui.crewFx = { id: c.id, cls: "transform" }; banner("LEVEL UP", `${c.name}が変身！`, `Lv.${r.lv} ・ 掘る力 ×2`); S.play("layer"); }
+        else { S.play("buy"); const el = $(`#pit [data-comp="${c.id}"]`); if (el && !reduceMotion()) { el.classList.remove("bump"); void el.offsetWidth; el.classList.add("bump"); } }
+        update(true);
+        if (!r.joined && !r.transformed) dirt(c.id, 3);
+      }
+      return;
+    }
+    if (d.skill) { if (E.buySkill(game, d.skill)) { S.play("unlock"); save(); const k = D.SKILLS.find((x) => x.id === d.skill); banner("SKILL", `特技「${k.name}」`, k.desc); } update(true); return; }
+    if (d.gear) { if (E.buyGear(game, d.gear)) { S.play("buy"); save(); ui.crewFx = { id: "me", cls: "transform" }; } update(true); return; }
     if (d.tab) {
       ui.tab = d.tab;
       app.querySelectorAll("[data-tab]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.tab === ui.tab)));

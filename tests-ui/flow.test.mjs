@@ -70,10 +70,10 @@ test("はじめから：タップで掘れて、お金で仲間を買える。�
   let s = await saved(p);
   assert.ok(s.game.life.depth > 10, String(s.game.life.depth));
   assert.ok(s.game.life.money >= 15);
-  await click(p, '[data-buy="apprentice"]');
+  await click(p, '[data-lvup="mog"]');
   await saveNow(p);
   s = await saved(p);
-  assert.equal(s.game.life.owned.apprentice, 1);
+  assert.equal(s.game.life.lv.mog, 1);
   assert.match(await text(p, "#depth"), /m/);
   assert.ok(await fits(p));
   await p.reload();
@@ -83,25 +83,26 @@ test("はじめから：タップで掘れて、お金で仲間を買える。�
   await wait(1200);
   await saveNow(p);
   const s2 = await saved(p);
-  assert.equal(s2.game.life.owned.apprentice, 1);
+  assert.equal(s2.game.life.lv.mog, 1);
   assert.ok(s2.game.life.depth > s.game.life.depth, "仲間が自動で掘っている");
   assert.deepEqual(p.errors, []);
 });
 
-test("道具タブでつるはしを強化できる", async () => {
+test("自分タブでつるはしを強化できる", async () => {
   const p = await open({ save: mk((g) => { g.life.money = 1000; }) });
   await click(p, '[data-act="continue"]');
-  await click(p, '[data-tab="tools"]');
-  await click(p, '[data-upg="pick_iron"]');
+  await click(p, '[data-tab="me"]');
+  await click(p, '[data-gear="pick"]');
   await saveNow(p);
-  assert.equal((await saved(p)).game.life.upgrades.pick_iron, true);
+  assert.equal((await saved(p)).game.life.gear.pick, 1);
+  assert.ok(await p.$('#pit [data-comp="me"][data-pick="1"]'), "自分の絵のつるはしが変わる");
   assert.ok(await fits(p));
 });
 
 test("マントルの壁で止まると知らせが出て、スキルツリーで耐熱スーツを開放すると先へ進める", async () => {
   const p = await open({ save: mk((g) => {
     g.life.layer = 3; g.life.depth = 35000; g.life.atWall = true; g.shards = 40;
-    g.life.owned.machine = 5;
+    g.life.lv.drill = 5;
   }) });
   await click(p, '[data-act="continue"]');
   await wait(300);
@@ -163,7 +164,7 @@ test("光る鉱石が出たらタップでブースト", async () => {
 test("地球の中心に着くとクリア画面。記録も見られる", async () => {
   const p = await open({ save: mk((g) => {
     for (const id of ["suit", "drill", "starpick", "f5"]) g.tree[id] = true;
-    g.life.layer = 6; g.life.depth = D.GOAL - 30; g.life.owned.chitei = 3;
+    g.life.layer = 6; g.life.depth = D.GOAL - 30; g.life.lv.soko = 3;
     g.lives = [{ lifeNo: 1, maxDepth: 35000, t: 600, shards: 31 }]; g.lifeNo = 2;
   }) });
   await click(p, '[data-act="continue"]');
@@ -276,7 +277,7 @@ test("別のタブで進んだセーブを、古いタブが上書きしない",
 });
 
 test("ほかの画面にいる間に着いた節目や化石も、掘る画面にもどると知らせが出る", async () => {
-  const p = await open({ save: mk((g) => { g.life.owned.mole = 40; g.lifeNo = 2; g.prevReach = { 100: 400 }; }) });
+  const p = await open({ save: mk((g) => { g.life.lv.mog = 40; g.lifeNo = 2; g.prevReach = { 100: 400 }; }) });
   await click(p, '[data-act="continue"]');
   await click(p, '[data-nav="book"]');
   await wait(1500);
@@ -285,7 +286,7 @@ test("ほかの画面にいる間に着いた節目や化石も、掘る画面�
 });
 
 test("転生画面のかけらの数は、掘り進むと増えていく。記録も見られる", async () => {
-  const p = await open({ save: mk((g) => { g.life.layer = 2; g.life.depth = 3000; g.life.owned.tunnel = 30; }) });
+  const p = await open({ save: mk((g) => { g.life.layer = 2; g.life.depth = 3000; g.life.lv.drill = 30; }) });
   await click(p, '[data-act="continue"]');
   await click(p, '[data-nav="rebirth"]');
   const a = await text(p, "#shardGain");
@@ -301,24 +302,59 @@ test("転生画面のかけらの数は、掘り進むと増えていく。記�
   assert.ok(await fits(p), "図鑑が下のメニューと重ならない");
 });
 
-test("やとった仲間・機械が穴の中に見える。買うと増え、持っていないものは出ない", async () => {
-  const p = await open({ save: mk((g) => { g.life.money = 5000; g.life.owned.mole = 30; }) });
+test("仲間は穴の横で掘っている。まだの仲間は出ない。強化で Lv が上がり、Lv.10 で変身する", async () => {
+  const p = await open({ save: mk((g) => { g.life.money = 1e6; g.life.lv.mog = 9; }) });
   await click(p, '[data-act="continue"]');
-  assert.equal(await p.$('#crew [data-crew="apprentice"]'), null, "まだやとっていない");
-  assert.match(await text(p, '#crew [data-crew="mole"]'), /30/);
-  assert.equal(await p.$$eval('#crew [data-crew="mole"] .who', (x) => x.length), 3, "絵は 3体まで");
-  await click(p, '[data-buy="apprentice"]');
-  assert.ok(await p.$('#crew [data-crew="apprentice"].new'), "新しく来たときは登場の動き");
-  assert.equal(await p.$$eval('#crew [data-crew="apprentice"] .who', (x) => x.length), 1);
-  await click(p, '[data-buy="apprentice"]');
-  assert.equal(await p.$$eval('#crew [data-crew="apprentice"] .who', (x) => x.length), 2);
+  assert.ok(await p.$('#pit [data-comp="mog"] svg'), "モグの絵");
+  assert.ok(await p.$('#pit [data-comp="me"] svg'), "自分の絵");
+  assert.equal(await p.$('#pit [data-comp="gan"]'), null, "ガンさんはまだ");
+  assert.equal(await p.$eval('#pit [data-comp="mog"]', (e) => e.dataset.stage), "0");
+  await click(p, '[data-lvup="mog"]');
+  assert.equal(await p.$eval('#pit [data-comp="mog"]', (e) => e.dataset.stage), "1", "変身して見た目が変わる");
+  assert.ok(await p.$('#pit [data-comp="mog"].transform'), "変身の演出");
+  assert.match(await text(p, "#banner"), /変身/);
+  assert.match(await text(p, "#shop"), /Lv\.10/);
   assert.ok(await fits(p));
 });
 
-test("仲間の絵の上をタップしても、ちゃんと掘れる", async () => {
-  const p = await open({ save: mk((g) => { g.life.owned.mole = 5; }) });
+test("新しい仲間を強化すると「仲間になった！」と登場する", async () => {
+  const p = await open({ save: mk((g) => { g.life.money = 1e6; g.life.layer = 1; g.life.depth = 200; }) });
   await click(p, '[data-act="continue"]');
-  const box = await (await p.$('#crew [data-crew="mole"]')).boundingBox();
+  await click(p, '[data-lvup="gan"]');
+  assert.ok(await p.$('#pit [data-comp="gan"].join'));
+  assert.match(await text(p, "#banner"), /仲間になった/);
+});
+
+test("Lv が足りると特技を買える", async () => {
+  const p = await open({ save: mk((g) => { g.life.money = 1e6; g.life.lv.mog = 10; }) });
+  await click(p, '[data-act="continue"]');
+  assert.ok(await p.$('[data-skill="mog_a"]:not([disabled])'));
+  assert.ok(await p.$('[data-skill="mog_b"][disabled]'), "Lv.25 の特技はまだ");
+  await click(p, '[data-skill="mog_a"]');
+  await saveNow(p);
+  assert.equal((await saved(p)).game.life.skills.mog_a, true);
+});
+
+test("オートタップを開放していると、触らなくても自分が掘り続ける", async () => {
+  const p = await open({ save: mk((g) => { g.tree.t6 = true; }) });
+  await click(p, '[data-act="continue"]');
+  await wait(1500);
+  assert.ok(await p.$('#pit [data-comp="me"].auto'), "オート中の印");
+  assert.ok(await p.$(".float"), "掘った数字が出る");
+  await saveNow(p);
+  assert.ok((await saved(p)).game.life.depth > 0);
+});
+
+test("ドリルンのターボ中は、ターボの見た目になる", async () => {
+  const p = await open({ save: mk((g) => { g.life.layer = 2; g.life.depth = 2500; g.life.lv.drill = 12; g.life.skills.drill_a = true; g.life.t = 25.2; }) });
+  await click(p, '[data-act="continue"]');
+  await p.waitForSelector('#pit [data-comp="drill"].turbo', { timeout: 2000 });
+});
+
+test("仲間の絵の上をタップしても、ちゃんと掘れる", async () => {
+  const p = await open({ save: mk((g) => { g.life.lv.mog = 5; }) });
+  await click(p, '[data-act="continue"]');
+  const box = await (await p.$('#pit [data-comp="mog"]')).boundingBox();
   await saveNow(p);
   const before = (await saved(p)).game.life.depth;
   for (let i = 0; i < 10; i++) await p.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
