@@ -10,28 +10,38 @@ function shop(g, tapsPerSec) {
   for (let guard = 0; guard < 200; guard++) {
     const L = g.life;
     const ratio = E.layerOf(g).value / E.hardNow(g); // 力 1 あたりのお金（今の深さで）
-    const speed = (x) => E.autoPower(x) + E.tapPower(x) * tapsPerSec; // かたさで割る前の力
+    const taps = tapsPerSec + (g.tree.t6 ? D.AUTO_TAP : 0);
+    const speed = (x) => E.autoPower(x) + E.tapPower(x) * (1 + 9 * E.critChance(x)) * taps; // かたさで割る前の力（会心の期待値こみ）
     const base = speed(g);
     const income = Math.max(1e-9, base * ratio);
     const cands = [];
-    for (const b of D.BUILDINGS) {
-      if (!E.isUnlocked(g, b.id)) continue;
-      const t = clone(g); t.life.owned[b.id] = (t.life.owned[b.id] || 0) + 1;
-      cands.push({ kind: "b", id: b.id, cost: E.buildingCost(g, b.id), gain: speed(t) - base });
+    for (const c of D.COMPANIONS) {
+      if (!E.isUnlocked(g, c.id)) continue;
+      const t = clone(g); t.life.lv[c.id] = (t.life.lv[c.id] || 0) + 1;
+      cands.push({ kind: "lv", id: c.id, cost: E.levelCost(g, c.id), gain: speed(t) - base });
     }
-    for (const u of D.UPGRADES) {
-      if (!E.canBuyUpgrade(g, u.id) || u.kind === "light") continue;
-      const t = clone(g); t.life.upgrades[u.id] = true;
-      cands.push({ kind: "u", id: u.id, cost: u.cost, gain: speed(t) - base });
+    for (const sk of D.SKILLS) {
+      if (!E.canBuySkill(g, sk.id)) continue;
+      const t = clone(g); t.life.skills[sk.id] = true;
+      let gain = speed(t) - base;
+      if (sk.turbo) gain = E.compPower(g, "drill") * (D.TURBO.mult - 1) * D.TURBO.dur / D.TURBO.every;
+      if (sk.ore) gain = base * 0.05;
+      cands.push({ kind: "sk", id: sk.id, cost: E.skillCost(sk.id), gain });
     }
-    if (E.canBuyUpgrade(g, "light")) cands.push({ kind: "u", id: "light", cost: D.UPGRADES.find((u) => u.id === "light").cost, gain: base * 0.1 });
+    for (const line of Object.keys(D.GEAR)) {
+      const cost = E.gearCost(g, line);
+      if (cost == null) continue;
+      const t = clone(g); t.life.gear[line] += 1;
+      const gain = line === "helmet" ? base * 0.05 : speed(t) - base;
+      cands.push({ kind: "gear", id: line, cost, gain });
+    }
     if (!cands.length) return;
     // 「買うまで待つ時間 + 元が取れる時間」が一番短いもの
     const score = (c) => Math.max(0, c.cost - L.money) / income + c.cost / Math.max(1e-12, c.gain * ratio);
     cands.sort((a, b) => score(a) - score(b));
     const best = cands[0];
     if (L.money < best.cost) return;
-    const ok = best.kind === "b" ? E.buy(g, best.id) : E.buyUpgrade(g, best.id);
+    const ok = best.kind === "lv" ? E.levelUp(g, best.id) : best.kind === "sk" ? E.buySkill(g, best.id) : E.buyGear(g, best.id);
     if (!ok) return;
   }
 }

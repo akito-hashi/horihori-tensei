@@ -41,10 +41,10 @@ test("伝説の道具は順番（耐熱スーツ → 超高圧ドリル → 星�
 });
 
 // ---- スキルツリー ----
-test("スキルツリーは 3本の枝（5・5・6マス）と道具 3つ。枝は根元から順に、かけらを払って開放", () => {
+test("スキルツリーは 3本の枝（6・5・6マス）と道具 3つ。枝は根元から順に、かけらを払って開放", () => {
   const branches = {};
   for (const n of D.TREE) branches[n.branch] = (branches[n.branch] || 0) + 1;
-  assert.deepEqual(branches, { tap: 5, friend: 5, treasure: 6, tool: 3 });
+  assert.deepEqual(branches, { tap: 6, friend: 5, treasure: 6, tool: 3 });
   const g = fresh();
   const [first, second] = D.TREE.filter((n) => n.branch === "tap");
   assert.equal(E.unlockNode(g, first.id), false, "かけらがない");
@@ -71,38 +71,30 @@ test("強いつるはし・黄金のつるはしの倍率がタップ力にか�
 
 test("仲間の力：タップに毎秒の掘る力の 5% が上乗せ", () => {
   const g = fresh();
-  g.life.owned.apprentice = 100;
+  g.life.lv.mog = 100;
   const base = E.tapPower(g);
   grant(g, "t4");
   assert.ok(Math.abs(E.tapPower(g) - (base + 0.05 * E.autoPower(g))) < 1e-9);
 });
 
-test("先輩の教え・気合いの朝礼・チームワーク（25人ごとに ×2）・まとめ買い割引", () => {
+test("先輩の教え・気合いの朝礼の倍率が仲間全員にかかる", () => {
   const g = fresh();
-  g.life.owned.apprentice = 24;
+  g.life.lv.mog = 24;
   const a = E.autoPower(g);
   const m1 = node("f1").autoMult, m4 = node("f4").autoMult;
   grant(g, "f1");
   assert.ok(Math.abs(E.autoPower(g) - a * m1) < 1e-9);
   grant(g, "f4");
   assert.ok(Math.abs(E.autoPower(g) - a * m1 * m4) < 1e-9);
-  const before = E.autoPower(g);
-  grant(g, "f3");
-  assert.ok(Math.abs(E.autoPower(g) - before) < 1e-9, "24人では変わらない");
-  g.life.owned.apprentice = 25;
-  assert.ok(Math.abs(E.autoPower(g) - 25 * D.BUILDINGS[0].out * m1 * m4 * 2) < 1e-9);
-  const c = E.buildingCost(g, "apprentice");
-  grant(g, "f2");
-  assert.equal(E.buildingCost(g, "apprentice"), Math.ceil(D.BUILDINGS[0].cost * Math.pow(D.COST_GROWTH, 25) * 0.9));
-  assert.ok(E.buildingCost(g, "apprentice") < c);
 });
 
-test("地底人は『地底の友だち』を開放するまで買えない", () => {
+
+test("ソコ（地底人）は『地底の友だち』を開放するまで仲間にならない", () => {
   const g = fresh();
   g.life.money = 1e15;
-  assert.equal(E.isUnlocked(g, "chitei"), false);
+  assert.equal(E.isUnlocked(g, "soko"), false);
   grant(g, "f5");
-  assert.equal(E.buy(g, "chitei"), true);
+  assert.ok(E.levelUp(g, "soko"));
 });
 
 test("会心の一撃：開放するとタップの約 10回に 1回が 10倍。開放前は起きない", () => {
@@ -156,7 +148,7 @@ test(`光る鉱石はときどき出て、${D.ORE.show}秒で消える。タッ�
   for (let s = 0; s < D.ORE.show + 1; s += 0.5) E.tick(g, 0.5);
   assert.equal(g.life.ore.shown, false, "時間がたつと消える");
   const h = keep;
-  h.life.owned.apprentice = 10;
+  h.life.lv.mog = 10;
   const tapBase = E.tapPower(h), autoBase = E.autoPower(h);
   const r = E.tapOre(h);
   assert.equal(r.mult, D.ORE.mult);
@@ -167,13 +159,13 @@ test(`光る鉱石はときどき出て、${D.ORE.show}秒で消える。タッ�
   assert.equal(E.tapOre(h), null, "出ていないときはタップできない");
 });
 
-test("『光る鉱石』を開放すると約 2倍、強力ライトで約 1.5倍出やすくなる", () => {
+test("『光る鉱石』を開放すると約 2倍、ヘルメットのライト 2段階で約 1.56倍出やすくなる", () => {
   const a = fresh(11), b = fresh(11), c = fresh(11);
   grant(b, "o1");
-  c.life.upgrades.light = true;
+  c.life.gear.helmet = 2; // ×1.5625
   const na = countOres(a, 6000, true), nb = countOres(b, 6000, true), nc = countOres(c, 6000, true);
   assert.ok(nb / na > 1.6 && nb / na < 2.4, `${na} ${nb}`);
-  assert.ok(nc / na > 1.25 && nc / na < 1.8, `${na} ${nc}`);
+  assert.ok(nc / na > 1.3 && nc / na < 1.85, `${na} ${nc}`);
 });
 
 test("『長持ち』でブーストが 1.5倍長い。『虹の鉱石』を開放したときだけ、虹色（10秒間 77倍）が出る", () => {
@@ -206,7 +198,7 @@ test("『化石図鑑』を開放すると、決まった深さを通ったと�
   assert.equal(Object.keys(g.fossils).length, 0, "開放前は見つからない");
   const h = fresh();
   grant(h, "o3");
-  h.life.owned.apprentice = 10;
+  h.life.lv.mog = 10;
   const before = E.autoPower(h);
   const r = E.dig(h, past);
   assert.ok(r.events.some((e) => e.type === "fossil" && e.id === f.id));
@@ -222,7 +214,7 @@ test("『化石図鑑』を開放すると、決まった深さを通ったと�
 test("『宝の地図』を開放すると、新しい地層に入ったときお金のボーナスが出る", () => {
   const a = fresh(), b = fresh();
   grant(b, "o4");
-  for (const g of [a, b]) { g.life.depth = 99; g.life.owned.mole = 5; }
+  for (const g of [a, b]) { g.life.depth = 99; g.life.lv.mog = 5; }
   const ra = E.dig(a, 10), rb = E.dig(b, 10);
   const ev = rb.events.find((e) => e.type === "layer");
   assert.ok(ev.bonus > 0);
@@ -236,7 +228,7 @@ test("転生すると深さに応じて星のかけらがもらえ、人生が�
   assert.equal(E.rebirthShards(g), 0);
   assert.equal(E.rebirth(g), null, "かけら 0 では転生できない");
   g.life.depth = 35000; g.life.layer = layerIdx("crust");
-  g.life.money = 999; g.life.owned.apprentice = 5; g.life.upgrades.pick_iron = true;
+  g.life.money = 999; g.life.lv.mog = 5; g.life.gear.pick = 1; g.life.skills.mog_a = true;
   grant(g, "t1");
   const s = E.rebirthShards(g);
   assert.equal(s, Math.floor(Math.sqrt(35000 / D.SHARD_DIV)));
@@ -246,8 +238,9 @@ test("転生すると深さに応じて星のかけらがもらえ、人生が�
   assert.equal(g.lifeNo, 2);
   assert.equal(g.life.depth, 0);
   assert.equal(g.life.money, 0);
-  assert.deepEqual(g.life.owned, {});
-  assert.deepEqual(g.life.upgrades, {});
+  assert.deepEqual(g.life.lv, {});
+  assert.deepEqual(g.life.skills, {});
+  assert.equal(g.life.gear.pick, 0);
   assert.ok(g.tree.t1);
   assert.equal(g.lives.length, 1);
   assert.equal(g.lives[0].maxDepth, 35000);
@@ -264,7 +257,7 @@ test("『かけら増量』で転生のかけらが 1.25倍", () => {
 
 test("節目の深さに着いた時間が記録され、転生後は前世の時間と比べられる", () => {
   const g = fresh();
-  g.life.owned.mole = 5;
+  g.life.lv.mog = 5;
   let first = null;
   for (let i = 0; i < 2000 && !first; i++) {
     const ev = E.tick(g, 0.5);
@@ -274,7 +267,7 @@ test("節目の深さに着いた時間が記録され、転生後は前世の�
   assert.equal(first.prev, null, "1回目の人生には前世がない");
   const t1 = g.life.reach[100];
   E.rebirth(g);
-  g.life.owned.mole = 500;
+  g.life.lv.mog = 500;
   let again = null;
   for (let i = 0; i < 2000 && !again; i++) {
     const ev = E.tick(g, 0.5);
@@ -290,7 +283,7 @@ test("地球の中心に着くとクリア（合計の時間が記録される�
   place(g, "inner");
   g.life.depth = D.GOAL - 10;
   E.tick(g, 1);
-  g.life.owned.chitei = 1; g.tree.f5 = true;
+  g.life.lv.soko = 1; g.tree.f5 = true;
   const ev = E.tick(g, 1);
   assert.ok(ev.some((e) => e.type === "clear"));
   assert.equal(g.life.depth, D.GOAL);
@@ -301,27 +294,29 @@ test("地球の中心に着くとクリア（合計の時間が記録される�
 });
 
 // ---- セーブの点検 ----
-test("こわれた・古いセーブを読みこむときは、知らないものを取りのぞき、遊べない形なら false", () => {
+test("こわれたセーブを読みこむときは、知らないものを取りのぞき、遊べない形なら false", () => {
   const g = fresh();
-  g.life.owned.apprentice = 3; g.life.owned.nazo = 9;
-  g.life.upgrades.pick_iron = true; g.life.upgrades.nazo = true;
+  g.life.lv.mog = 3; g.life.lv.nazo = 9;
+  g.life.skills.mog_a = true; g.life.skills.nazo = true;
+  g.life.gear.pick = 99; g.life.gear.nazo = 1;
   g.tree.t1 = true; g.tree.nazo = true;
   g.fossils.acorn = { lifeNo: 1, depth: 30 }; g.fossils.nazo = {};
   delete g.life.ore;
   assert.equal(E.sanitize(g), true);
-  assert.deepEqual(g.life.owned, { apprentice: 3 });
-  assert.deepEqual(Object.keys(g.life.upgrades), ["pick_iron"]);
+  assert.deepEqual(g.life.lv, { mog: 3 });
+  assert.deepEqual(Object.keys(g.life.skills), ["mog_a"]);
+  assert.deepEqual(g.life.gear, { pick: D.GEAR.pick.tiers.length, glove: 0, helmet: 0, boots: 0 });
   assert.deepEqual(Object.keys(g.tree), ["t1"]);
   assert.deepEqual(Object.keys(g.fossils), ["acorn"]);
   assert.ok(g.life.ore && g.life.ore.next > 0);
-  for (const bad of [null, {}, { v: 2 }, { ...clone(g), life: null }]) assert.equal(E.sanitize(bad), false);
+  for (const bad of [null, {}, { v: 3 }, { ...clone(g), life: null }]) assert.equal(E.sanitize(bad), false);
   const nan = clone(g); nan.life.depth = "abc";
   assert.equal(E.sanitize(nan), false);
   const deep = clone(g); deep.life.layer = 99;
   assert.equal(E.sanitize(deep), false);
-  const neg = clone(g); neg.life.owned.apprentice = -5;
+  const neg = clone(g); neg.life.lv.mog = -5;
   assert.equal(E.sanitize(neg), true);
-  assert.equal(neg.life.owned.apprentice, undefined);
+  assert.equal(neg.life.lv.mog, undefined);
 });
 
 test("セーブの点検：前世の記録やクリア記録のおかしな項目は取りのぞく", () => {

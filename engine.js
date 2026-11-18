@@ -16,14 +16,16 @@
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   }
 
-  const BUILDING = Object.fromEntries(D.BUILDINGS.map((b) => [b.id, b]));
-  const UPGRADE = Object.fromEntries(D.UPGRADES.map((u) => [u.id, u]));
+  const COMP = Object.fromEntries(D.COMPANIONS.map((c) => [c.id, c]));
+  const SKILL = Object.fromEntries(D.SKILLS.map((k) => [k.id, k]));
+  const GEAR_LINES = Object.keys(D.GEAR);
   const NODE = Object.fromEntries(D.TREE.map((n) => [n.id, n]));
   const LAYER_INDEX = Object.fromEntries(D.LAYERS.map((l, i) => [l.id, i]));
   const has = (game, id) => !!(game.tree && game.tree[id]);
 
   function newLife(game) {
-    const L = { depth: 0, layer: 0, money: 0, t: 0, owned: {}, upgrades: {}, taps: [], reach: {}, atWall: false, cleared: false, boost: null, ore: null };
+    const L = { depth: 0, layer: 0, money: 0, t: 0, lv: {}, skills: {}, gear: { pick: 0, glove: 0, helmet: 0, boots: 0 }, autoAcc: 0,
+      taps: [], reach: {}, atWall: false, cleared: false, boost: null, ore: null };
     game.life = L;
     scheduleOre(game);
     return L;
@@ -31,7 +33,7 @@
 
   function newGame({ seed } = {}) {
     const game = {
-      v: 1,
+      v: 2,
       rng: (seed == null ? Math.floor(Math.random() * 2 ** 32) : seed) >>> 0,
       lifeNo: 1,
       shards: 0,
@@ -58,37 +60,59 @@
     const b = game.life.boost;
     return b && game.life.t < b.until ? b.mult : 1;
   }
-  function pickMult(game) {
-    let m = 1;
-    for (const u of D.UPGRADES) if (u.kind === "pick" && game.life.upgrades[u.id]) m *= u.mult;
-    return m;
+  // ---- 仲間 ----
+  const lv = (game, id) => game.life.lv[id] || 0;
+  // 見た目の段階：-1=まだ仲間でない、0=Lv.1〜、1=Lv.10〜、2=Lv.25〜、3=Lv.50〜、4=Lv.100〜
+  function stage(game, id) {
+    const n = lv(game, id);
+    if (!n) return -1;
+    return D.LV_MILESTONES.slice(0, 4).filter((m) => n >= m).length;
   }
-  function buildingPower(game, id) {
-    const b = BUILDING[id];
-    const n = game.life.owned[id] || 0;
+  function turboOn(game) {
+    return !!game.life.skills.drill_a && game.life.t % D.TURBO.every >= D.TURBO.every - D.TURBO.dur;
+  }
+  // その仲間が毎秒掘る力（スキルツリーの倍率・化石・ブーストは含まない）
+  function compPower(game, id) {
+    const n = lv(game, id);
     if (!n) return 0;
-    let p = n * b.out;
-    const eq = UPGRADE["eq_" + id];
-    if (eq && game.life.upgrades[eq.id]) p *= eq.mult;
-    if (has(game, "f3")) p *= Math.pow(2, Math.floor(n / 25));
+    let p = n * COMP[id].out * Math.pow(2, D.LV_MILESTONES.filter((m) => n >= m).length);
+    for (const k of D.SKILLS) {
+      if (!game.life.skills[k.id]) continue;
+      if (k.selfMult && k.comp === id) p *= k.selfMult;
+      if (k.allMult) p *= k.allMult;
+    }
+    if (id === "drill" && turboOn(game)) p *= D.TURBO.mult;
     return p;
   }
-  // 仲間・機械が毎秒掘る力（かたさで割る前・ブーストなし）
+  function totalLv(game) {
+    return D.COMPANIONS.reduce((a, c) => a + lv(game, c.id), 0);
+  }
+  // 仲間全員が毎秒掘る力（かたさで割る前・ブーストなし）
   function autoRaw(game) {
     let p = 0;
-    for (const b of D.BUILDINGS) p += buildingPower(game, b.id);
+    for (const c of D.COMPANIONS) p += compPower(game, c.id);
     for (const nd of D.TREE) if (nd.autoMult && has(game, nd.id)) p *= nd.autoMult;
+    if (has(game, "f3")) p *= Math.pow(1.5, Math.floor(totalLv(game) / 100));
     return p * fossilMult(game);
   }
   function autoPower(game) {
     return autoRaw(game) * boostMult(game);
   }
+  function critChance(game) {
+    let c = has(game, "t3") ? 0.1 : 0;
+    for (const k of D.SKILLS) if (k.crit && game.life.skills[k.id]) c += k.crit;
+    return c + D.GEAR.boots.crit * game.life.gear.boots;
+  }
+  function comboMult(game) {
+    return 1 + (has(game, "t2") ? D.COMBO.base : 0) + D.GEAR.glove.combo * game.life.gear.glove;
+  }
   // タップ 1回の掘る力（かたさで割る前。連打・会心は含まない）
   function tapPower(game) {
-    let p = pickMult(game);
+    let p = Math.pow(D.GEAR.pick.tapMult, game.life.gear.pick);
     for (const nd of D.TREE) if (nd.tapMult && has(game, nd.id)) p *= nd.tapMult;
     p *= fossilMult(game);
     if (has(game, "t4")) p += 0.05 * autoRaw(game);
+    if (game.life.skills.mog_a) p += SKILL.mog_a.tapShare * compPower(game, "mog");
     return p * boostMult(game);
   }
   // 今の地層で、毎秒何 m 掘れるか（表示用）
@@ -186,9 +210,11 @@
     L.taps = (L.taps || []).filter((t) => t >= L.t - 1);
     L.taps.push(L.t);
     let p = tapPower(game);
-    const combo = has(game, "t2") && L.taps.length >= 5;
-    if (combo) p *= 1.5;
-    const crit = has(game, "t3") && rand(game) < 0.1;
+    const cm = comboMult(game);
+    const combo = cm > 1 && L.taps.length >= D.COMBO.taps;
+    if (combo) p *= cm;
+    const cc = critChance(game);
+    const crit = cc > 0 && rand(game) < cc;
     if (crit) p *= 10;
     const r = dig(game, p);
     return { gain: r.dug, crit, combo, events: r.events };
@@ -198,7 +224,8 @@
   function oreFreq(game) {
     let f = 1;
     if (has(game, "o1")) f *= 2;
-    if (game.life.upgrades.light) f *= 1.5;
+    f *= Math.pow(D.GEAR.helmet.ore, game.life.gear.helmet);
+    if (game.life.skills.soko_a) f *= SKILL.soko_a.ore;
     return f;
   }
   function scheduleOre(game) {
@@ -234,46 +261,63 @@
       events.push({ type: "oreGone" });
     }
     const r = dig(game, autoPower(game) * dt);
-    return events.concat(r.events);
+    events.push(...r.events);
+    if (has(game, "t6") && !L.cleared) {
+      L.autoAcc = (L.autoAcc || 0) + D.AUTO_TAP * dt;
+      while (L.autoAcc >= 1) {
+        L.autoAcc -= 1;
+        const t = tap(game);
+        events.push({ type: "autotap", gain: t.gain, crit: t.crit }, ...t.events);
+      }
+    }
+    return events;
   }
 
-  // ---- 買い物 ----
+  // ---- 買い物（仲間の強化・特技・自分の装備） ----
   function isUnlocked(game, id) {
-    const b = BUILDING[id];
-    if (b.node && !has(game, b.node)) return false;
-    return game.life.layer >= LAYER_INDEX[b.layer];
+    const c = COMP[id];
+    if (!c) return false;
+    if (c.node && !has(game, c.node)) return false;
+    return game.life.layer >= LAYER_INDEX[c.layer];
   }
-  function buildingCost(game, id) {
-    const b = BUILDING[id];
-    return Math.ceil(b.cost * Math.pow(D.COST_GROWTH, game.life.owned[id] || 0) * (has(game, "f2") ? 0.9 : 1));
+  function levelCost(game, id) {
+    return Math.ceil(COMP[id].cost * Math.pow(D.COST_GROWTH, lv(game, id)) * (has(game, "f2") ? 0.9 : 1));
   }
-  function buy(game, id) {
+  function levelUp(game, id) {
     const L = game.life;
-    if (!BUILDING[id] || !isUnlocked(game, id)) return false;
-    const c = buildingCost(game, id);
+    if (!isUnlocked(game, id)) return false;
+    const c = levelCost(game, id);
     if (L.money < c) return false;
+    const before = stage(game, id);
     L.money -= c;
-    L.owned[id] = (L.owned[id] || 0) + 1;
+    L.lv[id] = lv(game, id) + 1;
+    return { lv: L.lv[id], joined: L.lv[id] === 1, transformed: before >= 0 && stage(game, id) > before };
+  }
+  const skillCost = (id) => COMP[SKILL[id].comp].cost * SKILL[id].cost;
+  function canBuySkill(game, id) {
+    const k = SKILL[id];
+    return !!k && !game.life.skills[id] && lv(game, k.comp) >= k.need;
+  }
+  function buySkill(game, id) {
+    if (!canBuySkill(game, id) || game.life.money < skillCost(id)) return false;
+    game.life.money -= skillCost(id);
+    game.life.skills[id] = true;
     return true;
   }
-
-  function canBuyUpgrade(game, id) {
-    const u = UPGRADE[id], L = game.life;
-    if (!u || L.upgrades[id]) return false;
-    if (u.kind === "pick" && u.order > 0 && !L.upgrades[D.UPGRADES.find((x) => x.kind === "pick" && x.order === u.order - 1).id]) return false;
-    if (u.kind === "equip" && (L.owned[u.building] || 0) < u.need) return false;
-    return true;
+  // 次の段階の値段（もう最後まで買ったら null）
+  function gearCost(game, line) {
+    const tier = D.GEAR[line].tiers[game.life.gear[line]];
+    return tier ? tier.cost : null;
   }
-  function buyUpgrade(game, id) {
-    if (!canBuyUpgrade(game, id)) return false;
-    const u = UPGRADE[id];
-    if (game.life.money < u.cost) return false;
-    game.life.money -= u.cost;
-    game.life.upgrades[id] = true;
-    if (u.kind === "light" && game.life.ore && !game.life.ore.shown) {
+  function buyGear(game, line) {
+    const c = D.GEAR[line] ? gearCost(game, line) : null;
+    if (c == null || game.life.money < c) return false;
+    game.life.money -= c;
+    game.life.gear[line] += 1;
+    if (line === "helmet" && game.life.ore && !game.life.ore.shown) {
       // 次の鉱石までの待ち時間を、明るくなった分だけ縮める
       const o = game.life.ore;
-      o.next = game.life.t + (o.next - game.life.t) / 1.5;
+      o.next = game.life.t + (o.next - game.life.t) / D.GEAR.helmet.ore;
     }
     return true;
   }
@@ -311,17 +355,33 @@
   }
 
   // ---- セーブの点検 ----
+  // 前のしくみ（仲間を何人もやとう）のセーブを、仲間のレベルと装備に置きかえる
+  function migrateV1(game) {
+    const L = game.life, o = L.owned && typeof L.owned === "object" ? L.owned : {}, u = L.upgrades && typeof L.upgrades === "object" ? L.upgrades : {};
+    const n = (k) => (Number.isInteger(o[k]) && o[k] > 0 ? o[k] : 0);
+    const lvs = { mog: n("apprentice") + n("mole"), gan: n("shovel") + n("jack"), drill: n("tunnel") + n("machine") + n("magma"), soko: n("chitei") };
+    L.lv = Object.fromEntries(Object.entries(lvs).filter(([, v]) => v > 0));
+    L.skills = {};
+    L.gear = { pick: ["pick_iron", "pick_steel", "pick_diamond", "pick_mithril", "pick_star"].filter((k) => u[k] === true).length, glove: 0, helmet: u.light === true ? 1 : 0, boots: 0 };
+    delete L.owned; delete L.upgrades;
+    game.v = 2;
+  }
+
   // 読みこんだセーブを点検する。遊べない形なら false。知らないもの・おかしな数は取りのぞく
   function sanitize(game) {
     try {
       const num = (x) => typeof x === "number" && isFinite(x);
-      if (!game || game.v !== 1 || !game.life || typeof game.life !== "object") return false;
+      if (!game || (game.v !== 1 && game.v !== 2) || !game.life || typeof game.life !== "object") return false;
       const L = game.life;
+      if (game.v === 1) migrateV1(game);
       if (!num(L.depth) || L.depth < 0 || !num(L.money) || !num(L.t) || !Number.isInteger(L.layer) || !D.LAYERS[L.layer]) return false;
       if (!num(game.shards) || game.shards < 0 || !num(game.rng) || !Number.isInteger(game.lifeNo)) return false;
       const keep = (obj, ok) => Object.fromEntries(Object.entries(obj && typeof obj === "object" ? obj : {}).filter(([k, v]) => ok(k, v)));
-      L.owned = keep(L.owned, (k, v) => BUILDING[k] && Number.isInteger(v) && v > 0);
-      L.upgrades = keep(L.upgrades, (k, v) => UPGRADE[k] && v === true);
+      L.lv = keep(L.lv, (k, v) => COMP[k] && Number.isInteger(v) && v > 0);
+      L.skills = keep(L.skills, (k, v) => SKILL[k] && v === true);
+      const gear = L.gear && typeof L.gear === "object" ? L.gear : {};
+      L.gear = Object.fromEntries(GEAR_LINES.map((k) => [k, Number.isInteger(gear[k]) ? Math.max(0, Math.min(D.GEAR[k].tiers.length, gear[k])) : 0]));
+      if (!num(L.autoAcc)) L.autoAcc = 0;
       game.tree = keep(game.tree, (k, v) => NODE[k] && v === true);
       game.fossils = keep(game.fossils, (k) => D.FOSSILS.some((f) => f.id === k));
       game.prevReach = keep(game.prevReach, (k, v) => num(v));
@@ -365,8 +425,9 @@
   }
 
   return {
-    newGame, layerOf, tapPower, autoPower, autoSpeed, hardNow, hardAt, powerBetween, buildingPower, fossilMult, dig, tap, tick, tapOre,
-    isUnlocked, buildingCost, buy, canBuyUpgrade, buyUpgrade, canUnlock, unlockNode, wallTool,
+    newGame, layerOf, tapPower, autoPower, autoSpeed, hardNow, hardAt, powerBetween, fossilMult, dig, tap, tick, tapOre,
+    lv, stage, compPower, turboOn, critChance, comboMult, oreFreq, totalLv,
+    isUnlocked, levelCost, levelUp, skillCost, canBuySkill, buySkill, gearCost, buyGear, canUnlock, unlockNode, wallTool,
     rebirthShards, rebirth, sanitize, fmtNum, fmtDepth, rand,
   };
 });
