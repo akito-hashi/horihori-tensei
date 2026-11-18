@@ -74,7 +74,7 @@
     app.innerHTML = VIEWS[ui.view]();
     if (ui.confirm) app.insertAdjacentHTML("beforeend", `<div id="confirm" role="dialog" aria-modal="true"><div class="card">${ui.confirm.text}</div>
       <button class="btn" data-act="confirm-yes">${ui.confirm.yes}</button><button class="btn dark" data-act="confirm-no">やめる</button></div>`);
-    if (ui.view === "dig") { update(true); const p = ui.pending; ui.pending = []; p.forEach(toast); }
+    if (ui.view === "dig") { ui.crewSig = null; ui.crewPrev = null; update(true); const p = ui.pending; ui.pending = []; p.forEach(toast); }
     if (ui.view !== "clear") document.querySelectorAll(".confetti").forEach((c) => c.remove());
     running();
   }
@@ -110,6 +110,7 @@
           <span class="chip layerchip" id="layerchip"></span>
           <div class="gauge" aria-hidden="true"><i id="gdot"></i>${marks}<b>💎</b></div>
           <div class="shaft" aria-hidden="true"><div class="miner" id="miner">⛏️</div></div>
+          <div id="crew" aria-hidden="true"></div>
           <div class="taphint">タップで掘る！</div>
           <div id="toasts" aria-live="polite"></div>
         </section>
@@ -249,6 +250,7 @@
     const hx = E.hardNow(game) / D.LAYERS[0].hard; // 土を 1 としたかたさ
     $("#layerchip").textContent = `${layer.icon} ${layer.name} ・ かたさ ×${hx < 10 ? hx.toFixed(1).replace(/\.0$/, "") : N(hx)}`;
     $("#gdot").style.top = (gaugePos(L.depth) * 100).toFixed(2) + "%";
+    drawCrew();
     // お店：中身が変わったときだけ作り直す
     const items = shopItems();
     const sig = ui.tab + Math.round(Math.log10(E.hardNow(game)) * 20) + items.map((i) => i.key).join("|");
@@ -286,6 +288,27 @@
         <span class="sub">いま ✦${N(game.shards)} ・ 転生すると ✦${N(s)} もらえる</span>
         <button class="btn" data-nav="${can ? "tree" : "rebirth"}">${can ? "🌳 スキルツリーで開放する" : `✨ 転生して ✦${N(s)} もらう`}</button></div><div class="wallband" id="wallband"></div>`);
     } else if (!tool && wall && !L.cleared) { wall.remove(); const wb = $("#wallband"); if (wb) wb.remove(); }
+  }
+
+  // ---- 穴の中の仲間たち（やとった仲間・機械が掘っている姿） ----
+  const MACHINES = new Set(["shovel", "jack", "machine", "magma"]);
+  function drawCrew() {
+    const box = $("#crew");
+    if (!box) return;
+    const owned = game.life.owned;
+    const sig = D.BUILDINGS.map((b) => owned[b.id] || 0).join(",");
+    if (sig === ui.crewSig) return;
+    const before = ui.crewPrev || {};
+    ui.crewSig = sig;
+    box.innerHTML = D.BUILDINGS.map((b, i) => {
+      const n = owned[b.id] || 0;
+      if (!n) return "";
+      const was = before[b.id] || 0;
+      const anim = was === 0 && ui.crewPrev ? "new" : n > was && ui.crewPrev ? "more" : "";
+      const who = Array.from({ length: Math.min(3, n) }, (_, k) => `<span class="who ${MACHINES.has(b.id) ? "machine" : "worker"}" style="animation-delay:${(-(i * 0.17 + k * 0.29)).toFixed(2)}s">${b.icon}</span>`).join("");
+      return `<div class="crew-slot ${anim}" data-crew="${b.id}" style="grid-column:${i % 2 ? 3 : 1};grid-row:${Math.floor(i / 2) + 1}">${who}<b class="cnt num">×${N(n)}</b></div>`;
+    }).join("");
+    ui.crewPrev = { ...owned };
   }
 
   // ---- 演出 ----

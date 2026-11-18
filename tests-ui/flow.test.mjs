@@ -300,3 +300,29 @@ test("転生画面のかけらの数は、掘り進むと増えていく。記�
   await click(p, '[data-nav="book"]');
   assert.ok(await fits(p), "図鑑が下のメニューと重ならない");
 });
+
+test("やとった仲間・機械が穴の中に見える。買うと増え、持っていないものは出ない", async () => {
+  const p = await open({ save: mk((g) => { g.life.money = 5000; g.life.owned.mole = 30; }) });
+  await click(p, '[data-act="continue"]');
+  assert.equal(await p.$('#crew [data-crew="apprentice"]'), null, "まだやとっていない");
+  assert.match(await text(p, '#crew [data-crew="mole"]'), /30/);
+  assert.equal(await p.$$eval('#crew [data-crew="mole"] .who', (x) => x.length), 3, "絵は 3体まで");
+  await click(p, '[data-buy="apprentice"]');
+  assert.ok(await p.$('#crew [data-crew="apprentice"].new'), "新しく来たときは登場の動き");
+  assert.equal(await p.$$eval('#crew [data-crew="apprentice"] .who', (x) => x.length), 1);
+  await click(p, '[data-buy="apprentice"]');
+  assert.equal(await p.$$eval('#crew [data-crew="apprentice"] .who', (x) => x.length), 2);
+  assert.ok(await fits(p));
+});
+
+test("仲間の絵の上をタップしても、ちゃんと掘れる", async () => {
+  const p = await open({ save: mk((g) => { g.life.owned.mole = 5; }) });
+  await click(p, '[data-act="continue"]');
+  const box = await (await p.$('#crew [data-crew="mole"]')).boundingBox();
+  await saveNow(p);
+  const before = (await saved(p)).game.life.depth;
+  for (let i = 0; i < 10; i++) await p.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+  assert.ok(await p.$(".float"), "タップの数字が出る");
+  await saveNow(p);
+  assert.ok((await saved(p)).game.life.depth > before);
+});
