@@ -28,6 +28,8 @@
       taps: [], reach: {}, atWall: false, cleared: false, boost: null, ore: null, space: false, planet: null, atCore: false, boss: null };
     game.life = L;
     scheduleOre(game);
+    L.chest = null;
+    if (has(game, "m3")) scheduleChest(game);
     return L;
   }
 
@@ -139,6 +141,12 @@
     for (const c of constellations(game)) if (c[key]) m = key === "crit" ? m + c[key] : m * c[key];
     return m;
   }
+  // 掘って入るお金の倍率（スキルツリー「お金」・星座）
+  function moneyMult(game) {
+    let m = starBonus(game, "money");
+    for (const nd of D.TREE) if (nd.moneyMult && has(game, nd.id)) m *= nd.moneyMult;
+    return m;
+  }
   const prayerMult = (game) => 1 + D.PRAYER.mult * ((game.space && game.space.prayers) || 0);
   // 仲間全員にかかる倍率（スキルツリー・チームワーク・化石・星座・星の祈り。ブーストなし）
   function baseShared(game) {
@@ -212,7 +220,7 @@
   // power（かたさで割る前の量）だけ掘る。地層の境目ではかたさが変わる。壁は道具がないと越えられない。
   function dig(game, power) {
     const L = game.life;
-    const LS = layersFor(game), mm = starBonus(game, "money");
+    const LS = layersFor(game), mm = moneyMult(game);
     let rem = power, dug = 0;
     const events = [];
     while (rem > 0 && !L.cleared) {
@@ -326,6 +334,25 @@
     return { mult, dur, kind: rainbow ? "rainbow" : "gold" };
   }
 
+  // ---- お金の枝：宝箱・利子 ----
+  // いまの稼ぎ（毎秒のお金。仲間の自動ぶん）
+  function incomeRate(game) {
+    const layer = layerOf(game);
+    return (autoPower(game) / hardAt(layer, game.life.depth)) * layer.value * moneyMult(game);
+  }
+  function scheduleChest(game) {
+    const L = game.life;
+    L.chest = { shown: false, next: L.t + D.CHEST.minGap + rand(game) * (D.CHEST.maxGap - D.CHEST.minGap), shownAt: null, x: 0.5, y: 0.5 };
+  }
+  function tapChest(game) {
+    const L = game.life;
+    if (!L.chest || !L.chest.shown) return null;
+    const money = Math.max(incomeRate(game) * D.CHEST.seconds, layerOf(game).value * D.CHEST.minValue * moneyMult(game));
+    L.money += money;
+    scheduleChest(game);
+    return { money };
+  }
+
   function tick(game, dt) {
     const L = game.life;
     L.t += dt;
@@ -341,6 +368,18 @@
     } else if (o && o.shown && L.t >= o.shownAt + D.ORE.show) {
       scheduleOre(game);
       events.push({ type: "oreGone" });
+    }
+    // 宝箱
+    if (has(game, "m3")) {
+      if (!L.chest) scheduleChest(game);
+      const c = L.chest;
+      if (!c.shown && L.t >= c.next) { c.shown = true; c.shownAt = L.t; c.x = 0.18 + rand(game) * 0.6; c.y = 0.3 + rand(game) * 0.45; events.push({ type: "chest" }); }
+      else if (c.shown && L.t >= c.shownAt + D.CHEST.show) { scheduleChest(game); events.push({ type: "chestGone" }); }
+    }
+    // 貯金の利子（稼ぎに見合った分まで）
+    if (has(game, "m2") && L.money > 0) {
+      const cap = Math.max(incomeRate(game) * D.INTEREST.capSeconds, layerOf(game).value * D.INTEREST.minValue * moneyMult(game));
+      L.money += Math.min(L.money, cap) * D.INTEREST.rate * dt;
     }
     if (L.boss) {
       L.boss.hp = Math.max(0, L.boss.hp - autoPower(game) * dt);
@@ -429,7 +468,8 @@
     return game.life.space || game.life.layer >= LAYER_INDEX[c.layer];
   }
   function levelCost(game, id) {
-    return Math.ceil(COMP[id].cost * Math.pow(D.COST_GROWTH, lv(game, id)) * (has(game, "f2") ? 0.9 : 1));
+    const join = lv(game, id) === 0 && has(game, "m4") ? 0.1 : 1; // 仲間の紹介状
+    return Math.ceil(COMP[id].cost * Math.pow(D.COST_GROWTH, lv(game, id)) * (has(game, "f2") ? 0.9 : 1) * join);
   }
   function levelUp(game, id) {
     const L = game.life;
@@ -479,6 +519,7 @@
     if (!canUnlock(game, id) || game.shards < NODE[id].cost) return false;
     game.shards -= NODE[id].cost;
     game.tree[id] = true;
+    if (id === "m3" && !game.life.chest) scheduleChest(game);
     return true;
   }
   function wallTool(game) {
@@ -589,6 +630,8 @@
       L.atWall = !!L.atWall; L.cleared = !!L.cleared;
       if (!L.boost || !num(L.boost.mult) || !num(L.boost.until)) L.boost = null;
       if (!L.ore || !num(L.ore.next)) scheduleOre(game);
+      if (!L.chest || !num(L.chest.next)) L.chest = null;
+      else L.chest.shown = L.chest.shown === true;
       return true;
     } catch (e) {
       return false;
@@ -621,6 +664,7 @@
   return {
     newGame, layerOf, tapPower, autoPower, autoSpeed, hardNow, hardAt, powerBetween, fossilMult, dig, tap, tick, tapOre,
     lv, stage, compPower, compShown, sharedMult, turboOn, msCount,
+    moneyMult, incomeRate, scheduleChest, tapChest,
     planet, layersFor, canEnterSpace, enterSpace, bossHp, bossReward, startBoss, bossOdds, constellations, canPray, prayerCost, pray, totalDepth, critChance, comboMult, oreFreq, totalLv,
     isUnlocked, levelCost, levelUp, skillCost, canBuySkill, buySkill, gearCost, buyGear, canUnlock, unlockNode, wallTool,
     rebirthShards, rebirth, sanitize, fmtNum, fmtDepth, rand,

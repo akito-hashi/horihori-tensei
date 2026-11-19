@@ -41,10 +41,10 @@ test("伝説の道具は順番（耐熱スーツ → 超高圧ドリル → 星�
 });
 
 // ---- スキルツリー ----
-test("スキルツリーは 3本の枝（6・5・6マス）と道具 3つ。枝は根元から順に、かけらを払って開放", () => {
+test("スキルツリーは 4本の枝（6・5・6・5マス）と道具 3つ。枝は根元から順に、かけらを払って開放", () => {
   const branches = {};
   for (const n of D.TREE) branches[n.branch] = (branches[n.branch] || 0) + 1;
-  assert.deepEqual(branches, { tap: 6, friend: 5, treasure: 6, tool: 3 });
+  assert.deepEqual(branches, { tap: 6, friend: 5, treasure: 6, money: 5, tool: 3 });
   const g = fresh();
   const [first, second] = D.TREE.filter((n) => n.branch === "tap");
   assert.equal(E.unlockNode(g, first.id), false, "かけらがない");

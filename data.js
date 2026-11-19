@@ -1,5 +1,5 @@
 // ほりほり転生 — ゲームの数値・文章データ（ルールは engine.js）
-// 数値は tests/balance.test.js のボットで調整する（クリアまで約 2時間・転生 5〜8回・転生直後は前世の 2.5倍以上速い）
+// 数値は tests/balance.test.js のボットで調整する（クリアまで約 1時間〜1時間半・転生 5〜8回・転生直後は前世の 2.5倍以上速い）
 (function (root, factory) {
   if (typeof module === "object" && module.exports) module.exports = factory();
   else root.GameData = factory();
@@ -89,12 +89,17 @@
     { id: "o4", branch: "treasure", name: "宝の地図", icon: "🗺️", cost: 20, desc: "新しい地層に入るたびに、お金のボーナス" },
     { id: "o5", branch: "treasure", name: "虹の鉱石", icon: "🌈", cost: 60, desc: "光る鉱石がときどき虹色に（10秒間 ×77）" },
     { id: "o6", branch: "treasure", name: "かけら増量", icon: "✦", cost: 150, desc: "転生でもらえる星のかけら ×1.25" },
+    { id: "m1", branch: "money", name: "お小づかい", icon: "🪙", cost: 2, moneyMult: 2, desc: "掘って入るお金 ×2" },
+    { id: "m2", branch: "money", name: "貯金の利子", icon: "🐷", cost: 6, desc: "持っているお金が毎秒すこしずつ増える（ためるほど増える。増え方には上限あり）" },
+    { id: "m3", branch: "money", name: "宝箱", icon: "🎁", cost: 15, desc: "ときどき穴に宝箱が出る。タップすると、いまの稼ぎ約 1分ぶんのお金" },
+    { id: "m4", branch: "money", name: "仲間の紹介状", icon: "✉️", cost: 30, desc: "仲間になる最初の値段（Lv.1 にする値段）が 1/10" },
+    { id: "m5", branch: "money", name: "黄金の土", icon: "🌟", cost: 80, moneyMult: 3, desc: "掘って入るお金 ×3" },
     { id: "suit", branch: "tool", name: "耐熱スーツ", icon: "🧯", cost: 12, desc: "マントルの壁を越えられる" },
     { id: "drill", branch: "tool", name: "超高圧ドリル", icon: "🌀", cost: 200, desc: "外核の壁を越えられる" },
     { id: "starpick", branch: "tool", name: "星のつるはし", icon: "⭐", cost: 280, desc: "内核の壁を越えられる" },
   ];
   // 枝の中は根元から順番
-  for (const br of ["tap", "friend", "treasure", "tool"]) {
+  for (const br of ["tap", "friend", "treasure", "money", "tool"]) {
     const ns = TREE.filter((n) => n.branch === br);
     ns.forEach((n, i) => { n.idx = i; n.req = i ? ns[i - 1].id : null; });
   }
@@ -119,6 +124,11 @@
     { id: "egg", name: "地球のたまご", icon: "🥚", depth: 5500000, text: "地球が生まれたときの記憶が入っているらしい。" },
   ];
   const FOSSIL_BONUS = 0.02;
+
+  // 宝箱（スキルツリー「宝箱」）：minGap〜maxGap 秒ごとに出て、show 秒で消える。ごほうび = いまの稼ぎ seconds 秒ぶん（最低 layer.value × minValue）
+  const CHEST = { minGap: 60, maxGap: 120, show: 15, seconds: 60, minValue: 200 };
+  // 貯金の利子（スキルツリー）：毎秒 rate。ただし利子がつくのは「いまの稼ぎ capSeconds 秒ぶん」（最低 layer.value × minValue）まで
+  const INTEREST = { rate: 0.01, capSeconds: 120, minValue: 1000 };
 
   // 前世と時間を比べる節目の深さ
   const MILESTONES = [10, 100, 1000, 2000, 10000, 12000, 35000, 100000, 1000000, 2900000, 5150000, 6371000];
@@ -148,9 +158,9 @@
   };
   // 星 k の地層のかたさ = h0 × hg^k × layerHard[i] ×（月の大きさ ÷ その星の大きさ）。1m あたりのお金も同じ形で vg^k
   // 数値は tests/balance.test.js のボットで調整（月は 5〜25分、そのあとも止まらずに進める）
-  const SPACE = { h0: 70000, hg: 1.55, v0: 60000, vg: 2.5, layerHard: [1, 1.6, 2.5], grow: 0.5 };
+  const SPACE = { h0: 210000, hg: 1.55, v0: 60000, vg: 2.5, layerHard: [1, 1.6, 2.5], grow: 0.5 };
   // ボス：HP = base × growth^k（掘る力と同じ単位）。time 秒以内に倒す。ごほうび = HP ぶん掘ったときのお金 × reward
-  const BOSS = { time: 30, base: 8e11, growth: 1.65, reward: 0.5 };
+  const BOSS = { time: 30, base: 2.4e12, growth: 1.65, reward: 0.5 };
   // 星を 3つ倒すごとに 1つ完成する星座（ずっと続くボーナス）。表のあとは「タップ ×2」と「仲間 ×2」を交互に
   const STARS_PER_CONSTELLATION = 3;
   const CONSTELLATIONS = [
@@ -165,6 +175,6 @@
   // 星の祈り（スキルツリーを全部開放したあと、かけらで何度でも）：1回ごとに掘る力・タップ +mult
   const PRAYER = { base: 80, growth: 1.3, mult: 0.1 };
 
-  return { PLANETS, PLANET_GEN, SPACE, BOSS, STARS_PER_CONSTELLATION, CONSTELLATIONS, MORE_CONSTELLATIONS, PRAYER,
+  return { CHEST, INTEREST, PLANETS, PLANET_GEN, SPACE, BOSS, STARS_PER_CONSTELLATION, CONSTELLATIONS, MORE_CONSTELLATIONS, PRAYER,
     GOAL, LAYERS, COMPANIONS, COST_GROWTH, LV_MILESTONES, SKILLS, TURBO, GEAR, COMBO, AUTO_TAP, TREE, FOSSILS, FOSSIL_BONUS, MILESTONES, ORE, SHARD_DIV };
 });

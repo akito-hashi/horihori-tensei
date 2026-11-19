@@ -1,5 +1,5 @@
 // ゲームバランスの目標（ボットで確認）：
-// ・クリアまで約 1時間半〜2時間（子どもらしい遊び方で 90〜150分、よくタップする人は 70分以上、のんびりな人でも 210分以内）
+// ・クリアまで約 1時間〜1時間半（子どもらしい遊び方で 60〜110分、よくタップする人は 50分以上、のんびりな人でも 180分以内）
 // ・転生直後は「前世より速い！」がはっきり感じられる（2回目の人生で 10km に着くのが 2.5倍以上速い）
 // ・同じ壁で終わる人生が 2回続かない（かけらを貯めるだけの退屈な人生を作らない）
 // ・1回目の人生ではクリアできず、7分以上は遊べる
@@ -15,13 +15,13 @@ const kinds = {
 const all = Object.values(kinds).flat();
 const show = (rs) => rs.map((r) => `${Math.round(r.totalMin)}分/${r.lives.length}回`).join(" ");
 
-test("子どもらしい遊び方（安いマスから開放・毎秒2タップ）：90〜150分でクリア", () => {
-  for (const r of kinds.kid) assert.ok(r.cleared && r.totalMin >= 90 && r.totalMin <= 150, show(kinds.kid));
+test("子どもらしい遊び方（安いマスから開放・毎秒2タップ）：60〜110分でクリア", () => {
+  for (const r of kinds.kid) assert.ok(r.cleared && r.totalMin >= 60 && r.totalMin <= 110, show(kinds.kid));
 });
 
-test("よくタップする人は 70分以上、のんびりな人も 210分以内にクリア", () => {
-  for (const r of kinds.active) assert.ok(r.cleared && r.totalMin >= 70, show(kinds.active));
-  for (const r of kinds.relaxed) assert.ok(r.cleared && r.totalMin <= 210, show(kinds.relaxed));
+test("よくタップする人は 50分以上、のんびりな人も 180分以内にクリア", () => {
+  for (const r of kinds.active) assert.ok(r.cleared && r.totalMin >= 50, show(kinds.active));
+  for (const r of kinds.relaxed) assert.ok(r.cleared && r.totalMin <= 180, show(kinds.relaxed));
 });
 
 test("人生の回数は 5〜10回", () => {
