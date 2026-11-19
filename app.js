@@ -81,10 +81,14 @@
       <button class="btn" data-act="confirm-yes">${ui.confirm.yes}</button><button class="btn dark" data-act="confirm-no">やめる</button></div>`);
     if (ui.view === "dig") { ui.crewSig = null; update(true); const p = ui.pending; ui.pending = []; if (p.length) toast(p[p.length - 1]); }
     if (ui.view !== "clear") document.querySelectorAll(".confetti").forEach((c) => c.remove());
+    if (ui.view === "credits") { const r = $(".rollin"); if (r) r.addEventListener("animationend", () => { if (ui.view === "credits") go(ui.afterCredits || "clear"); }); }
     running();
   }
-  const navHtml = () => `<nav class="nav">${[["dig", "⛏️", "掘る"], ["tree", "🌳", "ツリー"], ["book", "📖", "図鑑"], ["rebirth", "✨", "転生"]]
+  const navHtml = () => `<nav class="nav">${[["dig", "⛏️", "掘る"], ["tree", "🌳", "ツリー"], ["book", "📖", "図鑑"], ...(game.cleared ? [["sky", "🌌", "星空"]] : []), ["rebirth", "✨", "転生"]]
     .map(([v, i, l]) => `<button data-nav="${v}" ${ui.view === v ? 'aria-current="page"' : ""}><i aria-hidden="true">${i}</i>${l}${v === "tree" && affordableNode() ? '<span class="dot" aria-label="開放できるマスあり"></span>' : ""}</button>`).join("")}</nav>`;
+
+  const where = () => (game.life.space ? `${E.planet(game.life.planet).icon} ${E.planet(game.life.planet).name} ${M(game.life.depth)}` : M(game.life.depth));
+  const PIC2 = () => ({ mog: C.mog(3), gan: C.gan(3), drill: C.drill(3), soko: C.soko(3) });
 
   const VIEWS = {
     title() {
@@ -97,24 +101,24 @@
         ${ui.note ? `<div class="center sub" style="opacity:1;color:#fff6c4">${ui.note}</div>` : ""}
         <div class="grow"></div>
         <button class="btn" data-act="new">はじめから</button>
-        ${game ? `<button class="btn dark" data-act="continue">つづきから ・ ${game.lifeNo}回目の人生 ・ ${M(L.depth)}</button>` : ""}
+        ${game ? `<button class="btn dark" data-act="continue">つづきから ・ ${game.lifeNo}回目の人生 ・ ${where()}</button>` : ""}
         <button class="sub" data-act="sound" style="padding:6px">${S.isOn() ? "🔊 音あり" : "🔇 音なし"}</button>
       </div>`;
     },
 
     dig() {
       const L = game.life;
-      const marks = D.LAYERS.filter((l) => l.wall).map((l) => `<span class="w ${game.tree[l.wall] ? "ok" : ""}" style="top:${(gaugePos(l.from) * 100).toFixed(1)}%"></span>`).join("");
+      const marks = L.space ? "" : D.LAYERS.filter((l) => l.wall).map((l) => `<span class="w ${game.tree[l.wall] ? "ok" : ""}" style="top:${(gaugePos(l.from) * 100).toFixed(1)}%"></span>`).join("");
       return `<header class="hud">
-          <div class="top"><span>${game.lifeNo}回目の人生</span><span class="sh">✦ <b class="num" id="shards">${N(game.shards)}</b>
+          <div class="top"><span>${game.lifeNo}回目の人生${L.space ? ` ・ ${E.planet(L.planet).icon} ${E.planet(L.planet).name}` : ""}</span><span class="sh">✦ <b class="num" id="shards">${N(game.shards)}</b>
             <button data-act="sound" class="snd" aria-label="効果音のオンオフ">${S.isOn() ? "🔊" : "🔇"}</button></span></div>
           <div id="depth" class="depth num">${M(L.depth)}</div>
           <div class="row2"><span>💰 <b class="num" id="money">${N(L.money)}</b></span><span id="speed"></span></div>
           <div id="boostslot"></div>
         </header>
-        <section id="pit" class="L-${E.layerOf(game).id}" tabindex="0" role="button" aria-label="タップで掘る">
+        <section id="pit" class="${L.space ? "space" : "L-" + E.layerOf(game).id}" tabindex="0" role="button" aria-label="タップで掘る">
           <span class="chip layerchip" id="layerchip"></span>
-          <div class="gauge" aria-hidden="true"><i id="gdot"></i>${marks}<b>💎</b></div>
+          <div class="gauge" aria-hidden="true"><i id="gdot"></i>${marks}<b>${L.space ? E.planet(L.planet).bossIcon : "💎"}</b></div>
           <div class="shaft" aria-hidden="true"></div>
           <div id="crew" aria-hidden="true"></div>
           <div id="dirtbox" aria-hidden="true"></div>
@@ -177,10 +181,10 @@
           <div class="center sub">もらえる星のかけら</div>
           <div class="shardnum num" id="shardGain">✦ ${N(s)}</div>
           <div class="glass" style="padding:4px 0">
-            <div class="rowx"><span>いちばん深いところ</span><b class="num" id="rbDepth">${M(L.depth)}</b></div>
+            <div class="rowx"><span>いちばん深いところ</span><b class="num" id="rbDepth">${where()}</b></div>
             <div class="rowx"><span>この人生で遊んだ時間</span><b class="num">${mmss(L.t)}</b></div>
             <div class="rowx"><span>見つけた化石</span><b class="num">${fossilsNow} 個</b></div></div>
-          <div class="glass pad" style="font-size:12px;line-height:1.7">リセット：深さ・お金・仲間・道具<br>ずっと残る：<b style="color:var(--gold)">スキルツリー・星のかけら・化石・前世の記録</b></div>
+          <div class="glass pad" style="font-size:12px;line-height:1.7">リセット：深さ・お金・仲間・道具<br>ずっと残る：<b style="color:var(--gold)">スキルツリー・星のかけら・化石・前世の記録${game.cleared ? "・星座・星の祈り" : ""}</b>${L.space ? `<br>🚀 生まれ変わると <b style="color:var(--gold)">${E.planet(game.space.best).icon} ${E.planet(game.space.best).name}</b> の地表から` : ""}</div>
           <div class="grow"></div>
           ${s >= 1 ? `<button class="btn" data-act="reborn">✨ 生まれ変わる</button>` : `<button class="btn" disabled>もう少し掘ろう（かけら 0）</button>`}
           <button class="btn dark" data-nav="dig">まだ掘る</button>
@@ -198,19 +202,59 @@
           <div class="pad center" style="border-radius:18px;background:rgba(40,8,4,.75);font-size:13px;line-height:1.8">${c.lifeNo}回目の人生で、ついに伝説の<br><b style="color:var(--gold)">「星のしずく」</b>を見つけた。<br>
             合計 ${hms(c.totalTime)} ・ 転生 ${c.lifeNo - 1}回 ・ 化石 ${Object.keys(game.fossils).length}/${D.FOSSILS.length}</div>
           <div class="grow"></div>
-          <button class="btn" data-act="records">記録を見る</button>
+          ${E.canEnterSpace(game) ? `<button class="btn" data-act="space">🚀 宇宙へ（星めぐり）</button>` : ""}
+          <button class="btn dark" data-act="records">記録を見る</button>
           <button class="btn dark" data-nav="rebirth">転生して、もっと速いクリアに挑戦</button>
           <button class="sub" data-nav="dig" style="padding:2px">地底にもどる</button>
         </div>`;
     },
 
+    credits() {
+      app.className = "creditsbg";
+      const c = game.clears[game.clears.length - 1] || { lifeNo: game.lifeNo, totalTime: game.totalTime };
+      const lives = [...game.lives.filter((l) => l.lifeNo < c.lifeNo).map((l) => `${l.lifeNo}回目の人生 …… ${M(l.maxDepth)}`), `${c.lifeNo}回目の人生 …… 地球の中心！`];
+      const pics = PIC2();
+      const friends = D.COMPANIONS.filter((x) => !x.node || game.tree[x.node]).map((x) => `<div class="cf">${pics[x.id]}<div><b>${x.name}</b><br><small>${x.kind}</small></div></div>`).join("");
+      return `<div id="roll" class="${reduceMotion() ? "still" : ""}"><div class="rollin">
+          <div class="cr-big hot">ほりほり転生</div>
+          <div class="cr-sec">✨ 地球の中心で 伝説の「星のしずく」を見つけた ✨</div>
+          <div class="cr-h">これまでの人生</div>${lives.map((t) => `<div>${t}</div>`).join("")}
+          <div class="cr-h">記録</div>
+          <div>合計の時間 …… ${hms(c.totalTime)}</div><div>転生した回数 …… ${c.lifeNo - 1}回</div><div>見つけた化石 …… ${Object.keys(game.fossils).length} / ${D.FOSSILS.length}</div>
+          <div class="cr-h">いっしょに掘った仲間</div><div class="cfs">${friends}</div>
+          <div class="cr-h">そして</div><div class="cr-me">${C.player(game.life.gear)}</div><div>何度生まれ変わっても掘りつづけた、あなた</div>
+          <div class="cr-end hot">Thank you for playing!</div>
+          <div class="sub">星のしずくが、宇宙へのとびらを開いた……</div>
+        </div></div>
+        <button class="btn dark skipbtn" data-act="skip-credits">${reduceMotion() ? "次へ" : "とばす ⏭"}</button>`;
+    },
+
+    sky() {
+      app.className = "skybg";
+      const cs = E.constellations(game), best = game.space.best, per = D.STARS_PER_CONSTELLATION;
+      const stars = Array.from({ length: best }, (_, k) => `<span class="st" title="${E.planet(k).name}">${E.planet(k).icon}</span>`).join("");
+      const next = per - (best % per);
+      const pr = game.space.prayers, cost = E.prayerCost(game), can = E.canPray(game);
+      return `<div class="screen">
+          <div class="thead"><span class="hot" style="font-size:22px">🌌 星空</span><span class="soulchip num">✦ ${N(game.shards)}</span></div>
+          <div class="glass pad"><div class="sub">たおした星 ${best}個 ・ いま ${game.life.space ? `${E.planet(game.life.planet).icon} ${E.planet(game.life.planet).name}` : "地球"}</div>
+            <div class="stars">${stars || '<span class="sub">まだ星をたおしていない。地球をクリアして宇宙へ！</span>'}</div>
+            <div class="sub">あと ${next}個で 次の星座が完成</div></div>
+          <div class="glass pad cons">${cs.length ? cs.map((x) => `<div>⭐ <b>${x.name}</b> ・ ${x.desc}</div>`).join("") : '<div class="sub">星を 3つたおすと、星座が 1つ完成する</div>'}</div>
+          <div class="glass pad"><b>🙏 星の祈り</b>（いま +${pr * Math.round(D.PRAYER.mult * 100)}%）<div class="sub">${can ? "かけらを使って、仲間全員の掘る力とタップを +10%。何度でも祈れる" : "スキルツリーを全部開放すると祈れるようになる"}</div>
+            <button class="btn" data-act="pray" ${can && game.shards >= cost ? "" : "disabled"} style="margin-top:6px">✦ ${N(cost)} で祈る</button></div>
+          <div class="grow"></div>
+        </div>${navHtml()}`;
+    },
+
     records() {
       app.className = "bookbg";
-      const rows = game.lives.map((l) => `<div>${l.lifeNo}回目：${M(l.maxDepth)} ・ ${mmss(l.t)} ・ ✦${N(l.shards)}</div>`).join("");
+      const rows = game.lives.map((l) => `<div>${l.lifeNo}回目：${l.planet != null ? `${E.planet(l.planet).icon} ${E.planet(l.planet).name} ` : ""}${M(l.maxDepth)} ・ ${mmss(l.t)} ・ ✦${N(l.shards)}</div>`).join("");
       const clears = game.clears.map((c) => `<div>🏆 ${c.lifeNo}回目の人生でクリア ・ 合計 ${hms(c.totalTime)}</div>`).join("");
       return `<div class="screen">
           <div class="hot" style="font-size:22px">📜 これまでの記録</div>
-          <div class="glass pad records">${clears}${rows || '<div class="sub">まだ前世はない</div>'}<div>いま：${game.lifeNo}回目 ・ ${M(game.life.depth)}</div></div>
+          <div class="glass pad records">${clears}${game.space.best ? `<div>🌌 いちばん遠い星：${E.planet(game.space.best).icon} ${E.planet(game.space.best).name}（${game.space.best}個の星をクリア）</div>` : ""}${rows || '<div class="sub">まだ前世はない</div>'}<div>いま：${game.lifeNo}回目 ・ ${where()}</div></div>
+          ${game.cleared ? `<button class="btn dark" data-act="credits">🎬 エンドロールをもう一度</button>` : ""}
           <button class="btn dark" data-act="back">もどる</button>
         </div>`;
     },
@@ -274,11 +318,19 @@
     $("#speed").textContent = L.cleared ? "🏆 クリアずみ" : L.atWall ? "壁で止まっている" : `毎秒 +${M(E.autoSpeed(game))}`;
     if (L.cleared && !$("#cleared")) pit.insertAdjacentHTML("beforeend", `<div id="wall" class="cleared" role="status"><b class="t" style="color:var(--gold)">🏆 地球の中心にクリアずみ！</b><br>転生すると、もっと速いクリアに挑戦できる。<button class="btn" data-nav="rebirth">✨ 転生する</button></div><span id="cleared"></span>`);
     const layer = E.layerOf(game);
-    const want = "L-" + layer.id;
-    if (!pit.classList.contains(want)) { pit.className = want; }
+    if (L.space) {
+      if (!pit.classList.contains("space")) pit.className = "space";
+      const bg = `linear-gradient(180deg, ${layer.color}, rgba(0,0,0,.55))`;
+      if (pit.dataset.bg !== layer.id) { pit.style.background = bg; pit.dataset.bg = layer.id; }
+    } else {
+      const want = "L-" + layer.id;
+      if (!pit.classList.contains(want)) { pit.className = want; pit.style.background = ""; pit.dataset.bg = ""; }
+    }
     const hx = E.hardNow(game) / D.LAYERS[0].hard; // 土を 1 としたかたさ
     $("#layerchip").textContent = `${layer.icon} ${layer.name} ・ かたさ ×${hx < 10 ? hx.toFixed(1).replace(/\.0$/, "") : N(hx)}`;
-    $("#gdot").style.top = (gaugePos(L.depth) * 100).toFixed(2) + "%";
+    $("#gdot").style.top = (L.space ? (L.depth / E.planet(L.planet).radius) * 100 : gaugePos(L.depth) * 100).toFixed(2) + "%";
+    if (L.space) $("#speed").textContent = L.boss ? "⚔️ ボス戦！" : L.atCore ? "中心に着いた！" : `毎秒 +${M(E.autoSpeed(game))}`;
+    drawBoss();
     drawCrew();
     // お店：中身が変わったときだけ作り直す
     const sig = shopSig();
@@ -311,6 +363,37 @@
         <span class="sub">いま ✦${N(game.shards)} ・ 転生すると ✦${N(s)} もらえる</span>
         <button class="btn" data-nav="${can ? "tree" : "rebirth"}">${can ? "🌳 スキルツリーで開放する" : `✨ 転生して ✦${N(s)} もらう`}</button></div><div class="wallband" id="wallband"></div>`);
     } else if (!tool && wall && !L.cleared) { wall.remove(); const wb = $("#wallband"); if (wb) wb.remove(); }
+  }
+
+  // ---- 星の中心のボス ----
+  function oddsText(o) {
+    return o >= 1.2 ? '<b style="color:#8fffb0">◎ 勝てそう！</b>' : o >= 0.8 ? '<b style="color:#ffd23a">○ ぎりぎり</b>' : '<b style="color:#ff9a9a">× まだ強すぎる</b>';
+  }
+  function drawBoss() {
+    const L = game.life, pit = $("#pit");
+    const core = $("#core"), bar = $("#bossbar");
+    if (!L.space || !pit) { if (core) core.remove(); if (bar) bar.remove(); return; }
+    const p = E.planet(L.planet);
+    if (L.atCore && !L.boss) {
+      const o = E.bossOdds(game, 3);
+      const html = `<div class="bicon" aria-hidden="true">${p.bossIcon}</div><b class="t">${p.boss}</b><br>
+        HP <b class="num">${N(E.bossHp(L.planet))}</b> ・ ${D.BOSS.time}秒で勝負<br>勝てる見こみ：${oddsText(o)}
+        <button class="btn" data-act="boss">⚔️ ボスに挑む</button><span class="sub">勝てないときは仲間を強化するか、転生して強くなろう</span>`;
+      if (!core) pit.insertAdjacentHTML("beforeend", `<div id="core" role="status">${html}</div>`);
+      else if (ui.coreOdds !== Math.round(o * 20)) core.innerHTML = html;
+      ui.coreOdds = Math.round(o * 20);
+    } else if (core) core.remove();
+    if (L.boss) {
+      const left = Math.max(0, L.boss.until - L.t), pct = (L.boss.hp / L.boss.max) * 100;
+      if (!bar) pit.insertAdjacentHTML("beforeend", `<div id="bossbar"><span class="bicon" id="bossicon" aria-hidden="true">${p.bossIcon}</span><div class="bb"><b>${p.boss}</b><div class="hp"><i id="bosshp"></i></div></div><b class="num" id="bosst"></b></div>`);
+      $("#bosshp").style.width = pct.toFixed(1) + "%";
+      $("#bosst").textContent = `${Math.ceil(left)}秒`;
+    } else if (bar) bar.remove();
+  }
+  function hitBoss() {
+    const ic = $("#bossicon");
+    if (!ic || reduceMotion()) return;
+    ic.classList.remove("hit"); void ic.offsetWidth; ic.classList.add("hit");
   }
 
   // ---- 穴の中の仲間たち（自分と仲間 4人が掘っている姿） ----
@@ -424,6 +507,19 @@
     const el = $("#banner");
     setTimeout(() => el && el.remove(), 2600);
   }
+  function confettiSmall() {
+    if (reduceMotion()) return;
+    const colors = ["#ffd23a", "#ff3d6e", "#3fd3ff", "#8fffb0"];
+    for (let i = 0; i < 24; i++) {
+      const c = document.createElement("i");
+      c.className = "confetti";
+      c.style.left = Math.random() * 100 + "vw";
+      c.style.background = colors[i % colors.length];
+      c.style.animationDuration = 1.8 + Math.random() * 1.5 + "s";
+      document.body.appendChild(c);
+      setTimeout(() => c.remove(), 3600);
+    }
+  }
   function confetti() {
     if (reduceMotion()) return;
     const colors = ["#ffd23a", "#ff3d6e", "#3fd3ff", "#8fffb0", "#fff"];
@@ -440,8 +536,9 @@
   }
 
   function milestoneHtml(e) {
-    const layer = LAYER_AT[e.depth];
-    const what = layer ? `${layer.icon} ${layer.name}に到達` : `📍 ${M(e.depth)} 到達`;
+    const layer = e.planet != null ? null : LAYER_AT[e.depth];
+    const what = e.planet != null ? `${E.planet(e.planet).icon} ${E.planet(e.planet).name} ${["", "1/3", "2/3", "中心"][e.part]}に到達`
+      : layer ? `${layer.icon} ${layer.name}に到達` : `📍 ${M(e.depth)} 到達`;
     if (e.prev == null) return `${what} ${game.lifeNo === 1 ? `<b class="num">${mmss(e.t)}</b>` : "初めて来た！"}`;
     const t = Math.max(e.t, 0.5);
     const x = e.prev / t;
@@ -451,11 +548,11 @@
   function handleEvents(evs) {
     for (const e of evs) {
       if (e.type === "layer") {
-        const l = D.LAYERS.find((x) => x.id === e.id);
+        const l = E.layersFor(game).find((x) => x.id === e.id) || D.LAYERS.find((x) => x.id === e.id);
         banner("NEW LAYER", `${l.icon} ${l.name}`, e.bonus ? `宝の地図ボーナス 💰 +${N(e.bonus)}` : "");
         S.play("layer");
       } else if (e.type === "milestone") {
-        if (e.depth < D.GOAL) { toast(milestoneHtml(e)); if (e.prev != null && e.prev > e.t) S.play("fast"); }
+        if (e.planet != null || e.depth < D.GOAL) { toast(milestoneHtml(e)); if (e.prev != null && e.prev > e.t) S.play("fast"); }
       } else if (e.type === "fossil") {
         const f = D.FOSSILS.find((x) => x.id === e.id);
         toast(`${f.icon} 化石を見つけた！ <b>${f.name}</b>（掘る力 +${Math.round(D.FOSSIL_BONUS * 100)}%）`);
@@ -470,7 +567,16 @@
         if (e.crit) S.play("crit");
       } else if (e.type === "ore") S.play("ore");
       else if (e.type === "wall") S.play("wall");
-      else if (e.type === "clear") { save(); S.play("clear"); go("clear"); return; }
+      else if (e.type === "clear") { save(); S.play("clear"); ui.afterCredits = "clear"; go("credits"); return; }
+      else if (e.type === "core") { toast(`${E.planet(e.planet).bossIcon} 星の中心に着いた！ ボスが待っている`); S.play("wall"); }
+      else if (e.type === "bossWin") { save(); S.play("clear"); banner("VICTORY", `🎉 ${E.planet(e.planet).boss}をたおした！`, `ごほうび 💰 +${N(e.reward)}`); confettiSmall(); }
+      else if (e.type === "bossFail") { S.play("wall"); banner("TIME UP", "時間切れ…", "仲間を強くして、もう一度挑もう"); }
+      else if (e.type === "constellation") { toast(`⭐ 星座「${e.name}」が完成！ ${e.desc}`); ui.pendingBanner = ["CONSTELLATION", `⭐ ${e.name} 完成！`, e.desc]; }
+      else if (e.type === "planet") {
+        const p = E.planet(e.planet);
+        save();
+        setTimeout(() => { if (ui.view === "dig") { render(); banner("NEXT STAR", `🚀 ${p.icon} ${p.name}へ！`, ui.pendingBanner ? `${ui.pendingBanner[1]}（${ui.pendingBanner[2]}）` : `ボス：${p.boss}`); ui.pendingBanner = null; } }, reduceMotion() ? 0 : 1600);
+      }
     }
   }
 
@@ -485,7 +591,7 @@
     if (ui.view === "dig") { update(false); if (dt > 0) crewDirt(dt); }
     else if (ui.view === "rebirth" && $("#shardGain")) {
       $("#shardGain").textContent = `✦ ${N(E.rebirthShards(game))}`;
-      $("#rbDepth").textContent = M(game.life.depth);
+      $("#rbDepth").textContent = where();
     }
     if (now - ui.lastSave > 5000) save();
     running();
@@ -499,11 +605,13 @@
   function digTap(ev) {
     const pit = $("#pit");
     if (game.life.cleared) return;
+    if (game.life.space && game.life.atCore && !game.life.boss) { swingMe(); dirt("me", 2); const g0 = game.life.money; E.tap(game); floatNum((ev && ev.clientX != null ? ev.clientX - pit.getBoundingClientRect().left : 100), (ev && ev.clientY != null ? ev.clientY - pit.getBoundingClientRect().top : 100) - 10, `💰+${N(game.life.money - g0)}`, "small"); update(false); return; }
     const r = E.tap(game);
     const box = pit.getBoundingClientRect();
     const x = ev && ev.clientX != null ? ev.clientX - box.left : box.width / 2;
     const y = ev && ev.clientY != null ? ev.clientY - box.top : box.height / 2;
-    floatNum(x + (Math.random() - 0.5) * 30, y - 10, `${r.crit ? "会心！ " : ""}+${M(r.gain)}`, r.crit ? "crit" : r.combo ? "combo" : "");
+    if (r.dmg != null) { floatNum(x + (Math.random() - 0.5) * 30, y - 10, `${r.crit ? "会心！ " : ""}-${N(r.dmg)}`, "dmg" + (r.crit ? " crit" : "")); hitBoss(); }
+    else floatNum(x + (Math.random() - 0.5) * 30, y - 10, `${r.crit ? "会心！ " : ""}+${M(r.gain)}`, r.crit ? "crit" : r.combo ? "combo" : "");
     swingMe(); dirt("me", r.crit ? 6 : 3);
     const hint = $("#taphint"); if (hint && game.life.depth >= 5) hint.remove();
     if (r.crit && !reduceMotion()) { pit.classList.remove("shake"); void pit.offsetWidth; pit.classList.add("shake"); }
@@ -514,7 +622,7 @@
 
   app.addEventListener("pointerdown", (ev) => {
     if (ui.view !== "dig" || ev.button > 0) return;
-    if (ev.target.closest("#ore,#wall,button")) return;
+    if (ev.target.closest("#ore,#wall,#core,button")) return;
     if (!ev.target.closest("#pit")) return;
     ev.preventDefault();
     digTap(ev);
@@ -524,6 +632,7 @@
   });
 
   app.addEventListener("click", (ev) => {
+    if (ui.view === "credits" && !ev.target.closest("button")) { const r = $("#roll"); if (r) r.classList.toggle("fast"); return; }
     const el = ev.target.closest("button");
     if (!el || el.disabled) return;
     const d = el.dataset;
@@ -569,7 +678,7 @@
       case "confirm-no": ui.confirm = null; render(); return;
       case "continue": {
         S.unlock(); ui.note = null;
-        go(game.life.cleared ? "clear" : "dig");
+        go(game.life.cleared && !game.life.space ? "clear" : "dig");
         if (game.migrated) {
           delete game.migrated;
           save();
@@ -592,11 +701,22 @@
         save();
         S.play("reborn");
         go("dig");
-        banner(`${game.lifeNo}回目の人生`, "✨ 転生！", `星のかけら ✦${N(r.shards)} を手に入れた`);
+        banner(`${game.lifeNo}回目の人生`, "✨ 転生！", `星のかけら ✦${N(r.shards)} を手に入れた${game.life.space ? `・${E.planet(game.life.planet).name}から` : ""}`);
         return;
       }
-      case "records": go("records"); return;
-      case "back": go(ui.prev && ui.prev !== "records" ? ui.prev : "dig"); return;
+      case "records": ui.recordsFrom = ui.view; go("records"); return;
+      case "credits": ui.afterCredits = "records"; go("credits"); return;
+      case "skip-credits": go(ui.afterCredits || "clear"); return;
+      case "space": {
+        if (!E.enterSpace(game)) return;
+        save(); S.play("reborn");
+        go("dig");
+        banner("SPACE", `🚀 ${E.planet(game.life.planet).icon} ${E.planet(game.life.planet).name}へ！`, "星のしずくの力で宇宙へ。星の中心のボスをたおそう");
+        return;
+      }
+      case "boss": { if (E.startBoss(game)) { S.play("layer"); banner("BOSS", `⚔️ ${E.planet(game.life.planet).boss}`, `${D.BOSS.time}秒以内にたおせ！ タップで攻撃`); update(false); } return; }
+      case "pray": { if (E.pray(game)) { S.play("unlock"); save(); } render(); return; }
+      case "back": go(ui.recordsFrom && ui.recordsFrom !== "records" && ui.recordsFrom !== "credits" ? ui.recordsFrom : "dig"); return;
     }
   }
 

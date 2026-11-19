@@ -561,6 +561,10 @@
       if (L.space && !(Number.isInteger(L.planet) && L.planet >= 0 && L.planet <= Math.max(game.space.best, 0) + 1)) return false;
       if (!L.space) L.planet = null;
       if (!num(L.depth) || L.depth < 0 || !num(L.money) || !num(L.t) || !Number.isInteger(L.layer) || !layersFor(game)[L.layer]) return false;
+      // 深さに合う地層に直す（地層の範囲の外にいたら）
+      const LS = layersFor(game);
+      const inLayer = (i) => L.depth >= LS[i].from && (!LS[i + 1] || L.depth <= LS[i + 1].from);
+      if (!inLayer(L.layer)) { let i = 0; while (LS[i + 1] && LS[i + 1].from <= L.depth) i++; L.layer = i; }
       L.atCore = L.space && L.atCore === true;
       if (!L.boss || !num(L.boss.hp) || !num(L.boss.max) || !num(L.boss.until) || !L.space) L.boss = null;
       if (!num(game.shards) || game.shards < 0 || !num(game.rng) || !Number.isInteger(game.lifeNo)) return false;

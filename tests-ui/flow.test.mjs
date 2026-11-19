@@ -161,14 +161,22 @@ test("光る鉱石が出たらタップでブースト", async () => {
   assert.match(await text(p, "#boost"), /7/);
 });
 
-test("地球の中心に着くとクリア画面。記録も見られる", async () => {
+test("地球の中心に着くとエンドロールが流れ、そのあとクリア画面。記録も見られる", async () => {
   const p = await open({ save: mk((g) => {
     for (const id of ["suit", "drill", "starpick", "f5"]) g.tree[id] = true;
     g.life.layer = 6; g.life.depth = D.GOAL - 30; g.life.lv.soko = 3;
     g.lives = [{ lifeNo: 1, maxDepth: 35000, t: 600, shards: 31 }]; g.lifeNo = 2;
   }) });
   await click(p, '[data-act="continue"]');
-  await p.waitForFunction(() => document.querySelector("#app").dataset.screen === "clear", { timeout: 4000 });
+  await p.waitForFunction(() => document.querySelector("#app").dataset.screen === "credits", { timeout: 4000 });
+  const roll = await text(p);
+  assert.match(roll, /Thank you for playing/);
+  assert.match(roll, /モグ/);
+  assert.match(roll, /1回目/, "人生の振り返り");
+  assert.ok(await p.$("#roll svg"), "仲間の絵");
+  assert.ok(await fits(p));
+  await click(p, '[data-act="skip-credits"]');
+  assert.equal(await screen(p), "clear");
   assert.match(await text(p), /地球の中心/);
   assert.ok(await fits(p));
   await click(p, '[data-act="records"]');
@@ -400,4 +408,106 @@ test("読めないセーブがあるときも、「はじめから」は確認�
   await p.reload();
   await click(p, '[data-act="new"]');
   assert.ok(await p.$('[data-act="confirm-no"]'));
+});
+
+// 宇宙（星めぐり）の画面
+function spaceSave(fn) {
+  return mk((g) => {
+    for (const id of ["suit", "drill", "starpick"]) g.tree[id] = true;
+    g.cleared = true;
+    g.clears = [{ lifeNo: 1, totalTime: 6000, lifeTime: 600 }];
+    Object.assign(g.life, { space: true, planet: 0, depth: 0, layer: 0, lv: { mog: 60, gan: 40 } });
+    fn && fn(g);
+  });
+}
+
+test("クリア画面から「宇宙へ」で月へ。星の地層と色になる。エンドロールは記録画面からもう一度見られる", async () => {
+  const p = await open({ save: mk((g) => {
+    for (const id of ["suit", "drill", "starpick"]) g.tree[id] = true;
+    g.life.layer = 6; g.life.depth = D.GOAL; g.life.cleared = true; g.cleared = true;
+    g.clears = [{ lifeNo: 1, totalTime: 6000, lifeTime: 6000 }];
+  }) });
+  await click(p, '[data-act="continue"]');
+  assert.equal(await screen(p), "clear");
+  await click(p, '[data-act="records"]');
+  await click(p, '[data-act="credits"]');
+  assert.equal(await screen(p), "credits");
+  await click(p, '[data-act="skip-credits"]');
+  assert.equal(await screen(p), "records", "記録画面にもどる");
+  await click(p, '[data-act="back"]');
+  assert.equal(await screen(p), "clear");
+  await click(p, '[data-act="space"]');
+  assert.equal(await screen(p), "dig");
+  assert.match(await text(p, "#layerchip"), /月/);
+  assert.match(await text(p, "#banner"), /月/);
+  await saveNow(p);
+  assert.equal((await saved(p)).game.life.space, true);
+  assert.ok(await fits(p));
+});
+
+test("星の中心に着くとボスの案内が出て、挑むとHPと残り時間が出る。勝つと次の星へ", async () => {
+  const p = await open({ save: spaceSave((g) => { g.life.lv = { mog: 3000 }; }) });
+  await click(p, '[data-act="continue"]');
+  await p.waitForSelector("#core", { timeout: 8000 });
+  assert.match(await text(p, "#core"), /うさぎ岩の番人/);
+  assert.match(await text(p, "#core"), /勝て/);
+  assert.ok(await fits(p));
+  await click(p, '[data-act="boss"]');
+  await p.waitForSelector("#bossbar");
+  assert.match(await text(p, "#bossbar"), /秒/);
+  await p.waitForFunction(() => /たおした/.test(document.querySelector("#banner")?.textContent || ""), { timeout: 8000 });
+  await p.waitForFunction(() => /火星/.test(document.querySelector("#layerchip").textContent), { timeout: 4000 });
+  await saveNow(p);
+  const s = await saved(p);
+  assert.equal(s.game.life.planet, 1);
+  assert.equal(s.game.space.best, 1);
+});
+
+test("ボス戦は時間切れで負け。「時間切れ」が出て、もう一度挑める", async () => {
+  const p = await open({ save: spaceSave((g) => {
+    g.life.lv = { mog: 1 }; g.life.depth = 1737000; g.life.layer = 2; g.life.atCore = true;
+    g.life.boss = { hp: 1e15, max: 1e15, until: g.life.t + 0.6 };
+  }) });
+  await click(p, '[data-act="continue"]');
+  await p.waitForFunction(() => /時間切れ/.test(document.querySelector("#banner")?.textContent || ""), { timeout: 4000 });
+  await p.waitForSelector('#core [data-act="boss"]');
+});
+
+test("星を 3つ倒すと星座が完成して知らせが出る。星空の画面で星座と星の祈りが見られる", async () => {
+  const p = await open({ save: spaceSave((g) => { g.space.best = 2; g.life.planet = 2; g.life.lv = { mog: 5000 }; g.shards = 500; }) });
+  await click(p, '[data-act="continue"]');
+  await p.waitForSelector('#core [data-act="boss"]', { timeout: 8000 });
+  await click(p, '[data-act="boss"]');
+  await p.waitForFunction(() => /つるはし座/.test(document.querySelector("#banner")?.textContent || "") || /つるはし座/.test(document.querySelector("#toasts")?.textContent || ""), { timeout: 8000 });
+  await click(p, '[data-nav="sky"]');
+  assert.equal(await screen(p), "sky");
+  const t = await text(p);
+  assert.match(t, /つるはし座/);
+  assert.match(t, /タップ ×2/);
+  assert.match(t, /星の祈り/);
+  assert.ok(await p.$('[data-act="pray"][disabled]'), "ツリーを全部開放するまでは祈れない");
+  assert.ok(await fits(p));
+});
+
+test("ツリーを全部開放すると、星空の画面で星の祈りができる", async () => {
+  const p = await open({ save: spaceSave((g) => { for (const n of D.TREE) g.tree[n.id] = true; g.shards = 500; }) });
+  await click(p, '[data-act="continue"]');
+  await click(p, '[data-nav="sky"]');
+  await click(p, '[data-act="pray"]');
+  await saveNow(p);
+  assert.equal((await saved(p)).game.space.prayers, 1);
+  assert.match(await text(p), /\+10%/);
+});
+
+test("宇宙で転生すると、いちばん先の星の地表から始まる", async () => {
+  const p = await open({ save: spaceSave((g) => { g.space.best = 3; g.life.planet = 3; g.life.depth = 2000000; }) });
+  await click(p, '[data-act="continue"]');
+  await click(p, '[data-nav="rebirth"]');
+  assert.match(await text(p), /土星/);
+  await click(p, '[data-act="reborn"]');
+  assert.match(await text(p, "#layerchip"), /土星|輪/);
+  await saveNow(p);
+  const s = await saved(p);
+  assert.equal(s.game.life.planet, 3);
+  assert.equal(s.game.life.depth < 10, true);
 });

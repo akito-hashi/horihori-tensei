@@ -2,7 +2,7 @@
 // アプリのファイル：ネットから最新を取り、つながらないときだけ保存済みを使う。
 // 書体（Google Fonts）：一度読み込んだものを保存して使う。
 // ファイルを追加・改名したときは FILES を直し、VERSION の数字を上げる。
-const VERSION = "v5";
+const VERSION = "v6";
 const CACHE = "horihori-tensei-" + VERSION;
 const FONT_CACHE = "horihori-tensei-fonts";
 const FILES = [

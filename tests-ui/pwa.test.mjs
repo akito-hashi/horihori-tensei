@@ -87,6 +87,8 @@ async function toClear(p) {
   await p.evaluate((s) => { localStorage.setItem("horihori-tensei-v1", JSON.stringify(s)); }, clearSave());
   await p.reload();
   await p.$eval('[data-act="continue"]', (e) => e.click());
+  await p.waitForFunction(() => document.querySelector("#app").dataset.screen === "credits", { timeout: 4000 });
+  await p.$eval('[data-act="skip-credits"]', (e) => e.click()); // エンドロールをとばしてクリア画面へ
   await p.waitForFunction(() => document.querySelector("#app").dataset.screen === "clear", { timeout: 4000 });
   await new Promise((r) => setTimeout(r, 300));
 }

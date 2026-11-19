@@ -220,3 +220,13 @@ test("宇宙にいるセーブも、保存して戻すと同じ続きになり�
   assert.equal(E.sanitize(old), true);
   assert.deepEqual(old.space, { best: 0, prayers: 0 });
 });
+
+test("セーブの点検：深さと地層が食いちがっていたら、深さに合う地層に直す（お金がマイナスにならない）", () => {
+  const g = inSpace();
+  g.life.depth = E.planet(0).radius * 0.8; g.life.layer = 0;
+  assert.equal(E.sanitize(g), true);
+  assert.equal(g.life.layer, 2);
+  const m = g.life.money;
+  E.dig(g, 1e6);
+  assert.ok(g.life.money >= m);
+});
