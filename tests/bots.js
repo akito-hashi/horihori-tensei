@@ -6,8 +6,10 @@ const D = require("../data.js");
 const clone = (o) => JSON.parse(JSON.stringify(o));
 
 // 買い物：毎秒どれだけ速くなるか ÷ 値段 が一番よいものを選ぶ。すぐ買えないなら、少し待つ価値があるかで決める
+// （速さのため、試しに買った状態を作って測り、すぐ元に戻す）
+function trial(g, apply, undo, speed) { apply(); const v = speed(g); undo(); return v; }
 function shop(g, tapsPerSec) {
-  for (let guard = 0; guard < 200; guard++) {
+  for (let guard = 0; guard < 3000; guard++) {
     const L = g.life;
     const ratio = E.layerOf(g).value / E.hardNow(g); // 力 1 あたりのお金（今の深さで）
     const taps = tapsPerSec + (g.tree.t6 ? D.AUTO_TAP : 0);
@@ -17,13 +19,13 @@ function shop(g, tapsPerSec) {
     const cands = [];
     for (const c of D.COMPANIONS) {
       if (!E.isUnlocked(g, c.id)) continue;
-      const t = clone(g); t.life.lv[c.id] = (t.life.lv[c.id] || 0) + 1;
-      cands.push({ kind: "lv", id: c.id, cost: E.levelCost(g, c.id), gain: speed(t) - base });
+      const n = L.lv[c.id] || 0;
+      const v = trial(g, () => { L.lv[c.id] = n + 1; }, () => { if (n) L.lv[c.id] = n; else delete L.lv[c.id]; }, speed);
+      cands.push({ kind: "lv", id: c.id, cost: E.levelCost(g, c.id), gain: v - base });
     }
     for (const sk of D.SKILLS) {
       if (!E.canBuySkill(g, sk.id)) continue;
-      const t = clone(g); t.life.skills[sk.id] = true;
-      let gain = speed(t) - base;
+      let gain = trial(g, () => { L.skills[sk.id] = true; }, () => { delete L.skills[sk.id]; }, speed) - base;
       if (sk.turbo) gain = E.compPower(g, "drill") * (D.TURBO.mult - 1) * D.TURBO.dur / D.TURBO.every;
       if (sk.ore) gain = base * 0.05;
       cands.push({ kind: "sk", id: sk.id, cost: E.skillCost(sk.id), gain });
@@ -31,8 +33,7 @@ function shop(g, tapsPerSec) {
     for (const line of Object.keys(D.GEAR)) {
       const cost = E.gearCost(g, line);
       if (cost == null) continue;
-      const t = clone(g); t.life.gear[line] += 1;
-      const gain = line === "helmet" ? base * 0.05 : speed(t) - base;
+      const gain = line === "helmet" ? base * 0.05 : trial(g, () => { L.gear[line] += 1; }, () => { L.gear[line] -= 1; }, speed) - base;
       cands.push({ kind: "gear", id: line, cost, gain });
     }
     if (!cands.length) return;
@@ -112,4 +113,45 @@ function playUntilClear(seed, opt = {}) {
   return { cleared: g.cleared, totalMin: g.totalTime / 60, lives, game: g };
 }
 
-module.exports = { playUntilClear, _shop: shop };
+// 宇宙（星めぐり）を遊ぶ。地球をクリアした game から、上限の時間まで。星ごとのクリア時間（分）を返す
+function playSpace(g, opt = {}) {
+  opt = { tapsPerSec: 3, oreCatch: 0.85, minutes: 180, ...opt };
+  if (!E.enterSpace(g)) throw new Error("宇宙へ行けない");
+  const start = g.totalTime, out = [];
+  let planetStart = g.totalTime, tapAcc = 0, oreSeen = null, coreSince = null, bestOdds = 0, hist = [];
+  const spend = () => {
+    for (let guard = 0; guard < 80; guard++) {
+      const opts = D.TREE.filter((n) => E.canUnlock(g, n.id) && n.cost <= g.shards).sort((a, b) => a.cost - b.cost);
+      if (opts.length && E.unlockNode(g, opts[0].id)) continue;
+      if (E.pray(g)) continue;
+      return;
+    }
+  };
+  spend();
+  while (g.totalTime - start < opt.minutes * 60 && out.length < (opt.maxPlanets || 40)) {
+    const L = g.life;
+    const ev = E.tick(g, 0.25);
+    for (const e of ev) if (e.type === "bossWin") { out.push(+((g.totalTime - planetStart) / 60).toFixed(1)); planetStart = g.totalTime; coreSince = null; bestOdds = 0; }
+    if (L.ore.shown) { if (!oreSeen) oreSeen = { at: L.t, will: E.rand(g) < opt.oreCatch }; if (oreSeen.will && L.t - oreSeen.at >= 1.5) { E.tapOre(g); oreSeen = null; } } else oreSeen = null;
+    tapAcc += opt.tapsPerSec * 0.25;
+    while (tapAcc >= 1) { tapAcc -= 1; E.tap(g); }
+    if (Math.abs(L.t % 1) < 1e-9 || Math.abs((L.t % 1) - 1) < 1e-9) {
+      if (!L.boss) shop(g, opt.tapsPerSec);
+      if (L.atCore && !L.boss) {
+        if (coreSince == null) coreSince = L.t;
+        const odds = E.bossOdds(g, opt.tapsPerSec);
+        if (odds >= 1.15) E.startBoss(g);
+        if (odds > bestOdds * 1.05) { bestOdds = odds; coreSince = L.t; }
+        // 中心で 4分たっても見こみが伸びない → 転生
+        if (L.t - coreSince > 240 && E.rebirthShards(g) >= 1) { E.rebirth(g); spend(); coreSince = null; bestOdds = 0; hist = []; }
+      } else if (!L.atCore) {
+        hist.push([L.t, L.depth]);
+        const old = hist.find(([t]) => t >= L.t - 180);
+        if (L.t > 300 && old && L.depth < old[1] * 1.05 && E.rebirthShards(g) >= 1) { E.rebirth(g); spend(); hist = []; }
+      }
+    }
+  }
+  return out;
+}
+
+module.exports = { playUntilClear, playSpace, _shop: shop };

@@ -5,7 +5,7 @@
 // ・1回目の人生ではクリアできず、7分以上は遊べる
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { playUntilClear } = require("./bots.js");
+const { playUntilClear, playSpace } = require("./bots.js");
 
 const kinds = {
   kid: [1, 2, 3].map((s) => playUntilClear(s, { tapsPerSec: 2, oreCatch: 0.7, cheapFirst: true })),
@@ -48,5 +48,14 @@ test("1回目の人生ではクリアできず、7分以上は遊べる", () => 
   for (const r of all) {
     assert.notEqual(r.lives[0].res, "clear");
     assert.ok(r.lives[0].t >= 7 * 60, `${r.lives[0].t}`);
+  }
+});
+
+test("星めぐり：地球クリアのあと 2時間で 5つ以上の星を進め、どの星も 45分以内。月はすぐには終わらない", () => {
+  for (const r of [kinds.kid[0], kinds.active[0]]) {
+    const times = playSpace(r.game, { minutes: 120, maxPlanets: 20 });
+    assert.ok(times.length >= 5, `進んだ星 ${times.length}: ${times}`);
+    assert.ok(times.every((t) => t <= 45), String(times));
+    assert.ok(times[0] >= 3, `月 ${times[0]}分`);
   }
 });

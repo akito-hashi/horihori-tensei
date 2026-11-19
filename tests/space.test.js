@@ -35,7 +35,9 @@ test("地球をクリアするまで宇宙へは行けない。クリアする�
   assert.equal(E.layerOf(c).name.includes("月"), true);
 });
 
-test("星は名前のある 7つのあとも、名前つきでいくらでも続き、先の星ほど硬い", () => {
+// 星を地表から中心まで掘りきるのに要る力の合計
+const work = (k) => { const p = E.planet(k); return p.layers.reduce((a, l, i) => a + E.powerBetween(i, l.from, i < 2 ? p.layers[i + 1].from : p.radius, p.layers), 0); };
+test("星は名前のある 7つのあとも、名前つきでいくらでも続き、先の星ほど掘りきるのが大変", () => {
   const names = D.PLANETS.map((p) => p.name);
   assert.deepEqual(names, ["月", "火星", "木星", "土星", "天王星", "海王星", "冥王星"]);
   const seen = new Set();
@@ -45,7 +47,7 @@ test("星は名前のある 7つのあとも、名前つきでいくらでも続
     seen.add(p.name);
     assert.equal(p.layers.length, 3);
     for (let i = 1; i < 3; i++) assert.ok(p.layers[i].hard >= E.hardAt(p.layers[i - 1], p.layers[i].from) - 1e-9, `${p.name} の地層 ${i}`);
-    if (k) assert.ok(p.layers[0].hard > E.planet(k - 1).layers[0].hard);
+    if (k) assert.ok(work(k) > work(k - 1), `星 ${k} は前の星より掘りきるのが大変`);
     assert.deepEqual(E.planet(k), E.planet(k), "同じ星はいつも同じ");
   }
   assert.ok(seen.size >= 55, "名前がほとんどかぶらない");

@@ -67,7 +67,9 @@
         colors: [`hsl(${hue} 55% 70%)`, `hsl(${hue} 50% 48%)`, `hsl(${hue} 55% 28%)`],
         layerNames: [`${name}の表面`, `${name}の奥`, `${name}のコア`] };
     }
-    const hk = S.h0 * Math.pow(S.hg, k), vk = S.v0 * Math.pow(S.vg, k);
+    // 大きい星ほど地面はやわらかい（星の大きさで掘る時間が極端に変わらないように）
+    const size = D.PLANETS[0].radius / p.radius;
+    const hk = S.h0 * Math.pow(S.hg, k) * size, vk = S.v0 * Math.pow(S.vg, k) * size;
     p.index = k;
     p.layers = [0, 1, 2].map((i) => ({ id: `p${k}_${i}`, name: p.layerNames[i], icon: p.icon, from: (p.radius * i) / 3,
       hard: hk * S.layerHard[i], value: vk * S.layerHard[i], grow: i ? S.grow : 0, color: p.colors[i] }));
@@ -590,11 +592,13 @@
   }
 
   // ---- 表示用の数字 ----
-  const UNITS = [[1e32, "溝"], [1e28, "穣"], [1e24, "𥝱"], [1e20, "垓"], [1e16, "京"], [1e12, "兆"], [1e8, "億"], [1e4, "万"]];
+  const UNITS = [[1e68, "無量大数"], [1e64, "不可思議"], [1e60, "那由他"], [1e56, "阿僧祇"], [1e52, "恒河沙"], [1e48, "極"], [1e44, "載"], [1e40, "正"], [1e36, "澗"],
+    [1e32, "溝"], [1e28, "穣"], [1e24, "𥝱"], [1e20, "垓"], [1e16, "京"], [1e12, "兆"], [1e8, "億"], [1e4, "万"]];
   const commas = (n) => String(Math.floor(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   function fmtNum(x) {
     if (!isFinite(x)) return "∞";
     if (x < 1e4) return commas(x);
+    if (x >= 1e72) { const e = Math.floor(Math.log10(x)); return (Math.floor((x / Math.pow(10, e)) * 10) / 10).toFixed(1).replace(/\.0$/, "") + "e" + e; }
     const [u, name] = UNITS.find(([u]) => x >= u);
     const v = x / u;
     if (v >= 100) return commas(v) + name;

@@ -79,6 +79,9 @@ test("大きな数は日本式（万・億・兆…）、深さは m と km で�
   assert.equal(E.fmtNum(1.2e8), "1.2億");
   assert.equal(E.fmtNum(8.7e15), "8,700兆");
   assert.equal(E.fmtNum(3e20), "3垓");
+  assert.equal(E.fmtNum(5e40), "5正");
+  assert.equal(E.fmtNum(2.5e68), "2.5無量大数");
+  assert.equal(E.fmtNum(1.234e75), "1.2e75");
   assert.equal(E.fmtDepth(0), "0 m");
   assert.equal(E.fmtDepth(0.04), "4 cm");
   assert.equal(E.fmtDepth(0.001), "1 cm");

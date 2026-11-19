@@ -146,10 +146,11 @@
     bosses: ["岩のゴーレム", "ほうき星の竜", "まぼろしの巨人", "星くいモンスター", "光の騎士", "ブラックホールねこ"],
     bossIcons: ["🗿", "🐲", "👹", "👾", "🛡️", "🐈‍⬛"],
   };
-  // 星 k の地層のかたさ = h0 × hg^k × layerHard[i]。1m あたりのお金 = v0 × vg^k × layerHard[i]
-  const SPACE = { h0: 40000, hg: 3, v0: 60000, vg: 2.6, layerHard: [1, 1.6, 2.5], grow: 0.5 };
+  // 星 k の地層のかたさ = h0 × hg^k × layerHard[i] ×（月の大きさ ÷ その星の大きさ）。1m あたりのお金も同じ形で vg^k
+  // 数値は tests/balance.test.js のボットで調整（月は 5〜25分、そのあとも止まらずに進める）
+  const SPACE = { h0: 70000, hg: 1.55, v0: 60000, vg: 2.5, layerHard: [1, 1.6, 2.5], grow: 0.5 };
   // ボス：HP = base × growth^k（掘る力と同じ単位）。time 秒以内に倒す。ごほうび = HP ぶん掘ったときのお金 × reward
-  const BOSS = { time: 30, base: 5e11, growth: 3.2, reward: 1 };
+  const BOSS = { time: 30, base: 8e11, growth: 1.65, reward: 0.5 };
   // 星を 3つ倒すごとに 1つ完成する星座（ずっと続くボーナス）。表のあとは「タップ ×2」と「仲間 ×2」を交互に
   const STARS_PER_CONSTELLATION = 3;
   const CONSTELLATIONS = [
