@@ -62,7 +62,7 @@
     if (k < D.PLANETS.length) p = { ...D.PLANETS[k] };
     else {
       const n = k - D.PLANETS.length;
-      const name = G.syll[n % 16] + G.syll[(Math.floor(n / 16) + n * 5) % 16] + "星";
+      const name = G.syll[n % 16] + G.syll[(Math.floor(n / 16) + n * 5) % 16] + "星" + (n >= 256 ? ` ${Math.floor(n / 256) + 1}` : "");
       const hue = (n * 47) % 360;
       p = { name, icon: G.icons[n % G.icons.length], radius: (1500 + ((n * 2654435761) % 6500)) * 1000,
         boss: `${name}の${G.bosses[n % G.bosses.length]}`, bossIcon: G.bossIcons[n % G.bossIcons.length],
@@ -131,7 +131,7 @@
       else {
         const j = i - D.CONSTELLATIONS.length, m = D.MORE_CONSTELLATIONS;
         const name = m[j % m.length] + (j >= m.length ? ` ${Math.floor(j / m.length) + 1}` : "");
-        out.push(j % 2 ? { name, desc: "仲間全員の掘る力 ×2", auto: 2 } : { name, desc: "タップ ×2", tap: 2 });
+        out.push(j % 2 ? { name, desc: "仲間全員の掘る力 ×3", auto: 3 } : { name, desc: "タップ ×3", tap: 3 });
       }
     }
     return out;
@@ -147,7 +147,7 @@
     for (const nd of D.TREE) if (nd.moneyMult && has(game, nd.id)) m *= nd.moneyMult;
     return m;
   }
-  const prayerMult = (game) => 1 + D.PRAYER.mult * ((game.space && game.space.prayers) || 0);
+  const prayerMult = (game) => Math.pow(1 + D.PRAYER.mult, (game.space && game.space.prayers) || 0);
   // 仲間全員にかかる倍率（スキルツリー・チームワーク・化石・星座・星の祈り。ブーストなし）
   function baseShared(game) {
     let m = 1;
@@ -256,6 +256,7 @@
       }
       events.push(ev);
     }
+    if (!(L.money < 1e300)) L.money = L.money > 0 || L.money === Infinity ? 1e300 : 0;
     afterDig(game, events);
     return { dug, events };
   }
@@ -269,7 +270,9 @@
       if (m.depth <= L.depth && L.reach[m.key] == null) {
         L.reach[m.key] = L.t;
         const prev = game.prevReach[m.key];
-        events.push({ type: "milestone", ...m, t: L.t, prev: prev == null ? null : prev });
+        const t = L.space ? L.t - (L.planetT || 0) : L.t; // 星ではその星に着いてからの時間
+        if (L.space) L.reach[m.key] = t;
+        events.push({ type: "milestone", ...m, t, prev: prev == null ? null : prev });
       }
     }
     if (L.space) return;
@@ -388,6 +391,7 @@
       const r = dig(game, autoPower(game) * dt);
       events.push(...r.events);
     }
+    if (!(L.money < 1e300)) L.money = L.money > 0 || L.money === Infinity ? 1e300 : 0;
     if (has(game, "t6") && !L.cleared) {
       L.autoAcc = (L.autoAcc || 0) + D.AUTO_TAP * dt;
       while (L.autoAcc >= 1) {
@@ -416,7 +420,8 @@
   function bossOdds(game, tapsPerSec = 3) {
     const L = game.life;
     const taps = tapsPerSec + (has(game, "t6") ? D.AUTO_TAP : 0);
-    const dps = autoRaw(game) + tapPower(game) * (1 + 9 * critChance(game)) * taps;
+    // ブーストは数えない（見こみがブーストの始まり・終わりでぶれないように）
+    const dps = autoRaw(game) + (tapPower(game) / boostMult(game)) * (1 + 9 * critChance(game)) * taps;
     return (dps * D.BOSS.time) / bossHp(L.space ? L.planet : 0);
   }
   function bossCheck(game, events) {
@@ -431,7 +436,7 @@
       events.push({ type: "bossWin", planet: k, reward });
       const cs = constellations(game);
       for (let i = before; i < cs.length; i++) events.push({ type: "constellation", name: cs[i].name, desc: cs[i].desc });
-      L.planet = k + 1; L.depth = 0; L.layer = 0; L.atCore = false;
+      L.planet = k + 1; L.depth = 0; L.layer = 0; L.atCore = false; L.planetT = L.t;
       events.push({ type: "planet", planet: k + 1 });
     } else if (L.t >= b.until) {
       L.boss = null;
@@ -446,7 +451,8 @@
   function enterSpace(game) {
     if (!canEnterSpace(game)) return false;
     const L = game.life;
-    Object.assign(L, { space: true, planet: game.space.best, depth: 0, layer: 0, atWall: false, cleared: false, atCore: false, boss: null });
+    Object.assign(L, { space: true, planet: game.space.best, startPlanet: game.space.best, dugBefore: L.depth, planetT: L.t,
+      depth: 0, layer: 0, atWall: false, cleared: false, atCore: false, boss: null });
     return true;
   }
 
@@ -480,6 +486,17 @@
     L.money -= c;
     L.lv[id] = lv(game, id) + 1;
     return { lv: L.lv[id], joined: L.lv[id] === 1, transformed: before >= 0 && stage(game, id) > before };
+  }
+  // まとめて強化（n 回まで、買えるだけ）
+  function levelUpMany(game, id, n) {
+    let count = 0, joined = false, transformed = false, last = null;
+    while (count < n) {
+      const r = levelUp(game, id);
+      if (!r) break;
+      count++; last = r;
+      joined = joined || r.joined; transformed = transformed || r.transformed;
+    }
+    return count ? { count, lv: last.lv, joined, transformed } : false;
   }
   const skillCost = (id) => COMP[SKILL[id].comp].cost * SKILL[id].cost;
   function canBuySkill(game, id) {
@@ -537,8 +554,18 @@
     for (let i = 0; i < L.planet; i++) d += planet(i).radius;
     return d + L.depth;
   }
+  // この人生で掘った深さ（宇宙では、この人生で着いた星から数える。地球から来た人生は地球の分もふくむ）
+  function dugThisLife(game) {
+    const L = game.life;
+    if (!L.space) return L.depth;
+    let d = L.dugBefore || 0;
+    for (let i = L.startPlanet == null ? L.planet : L.startPlanet; i < L.planet; i++) d += planet(i).radius;
+    return d + L.depth;
+  }
   function rebirthShards(game) {
-    return Math.floor(Math.sqrt(totalDepth(game) / D.SHARD_DIV) * (has(game, "o6") ? 1.25 : 1));
+    const L = game.life;
+    const far = L.space ? 1 + 0.1 * L.planet : 1; // 遠い星ほど 1m の価値が高い
+    return Math.floor(Math.sqrt(dugThisLife(game) / D.SHARD_DIV) * far * (has(game, "o6") ? 1.25 : 1));
   }
   function rebirth(game) {
     const s = rebirthShards(game);
@@ -550,7 +577,7 @@
     game.lifeNo += 1;
     const wasSpace = L.space;
     newLife(game);
-    if (wasSpace) Object.assign(game.life, { space: true, planet: game.space.best });
+    if (wasSpace) Object.assign(game.life, { space: true, planet: game.space.best, startPlanet: game.space.best, dugBefore: 0, planetT: 0 });
     return { shards: s };
   }
 
@@ -601,6 +628,11 @@
       L.space = L.space === true;
       if (L.space && !(Number.isInteger(L.planet) && L.planet >= 0 && L.planet <= Math.max(game.space.best, 0) + 1)) return false;
       if (!L.space) L.planet = null;
+      else {
+        if (!(Number.isInteger(L.startPlanet) && L.startPlanet >= 0 && L.startPlanet <= L.planet)) L.startPlanet = L.planet;
+        if (!num(L.dugBefore) || L.dugBefore < 0) L.dugBefore = 0;
+        if (!num(L.planetT)) L.planetT = 0;
+      }
       if (!num(L.depth) || L.depth < 0 || !num(L.money) || !num(L.t) || !Number.isInteger(L.layer) || !layersFor(game)[L.layer]) return false;
       // 深さに合う地層に直す（地層の範囲の外にいたら）
       const LS = layersFor(game);
@@ -663,7 +695,7 @@
 
   return {
     newGame, layerOf, tapPower, autoPower, autoSpeed, hardNow, hardAt, powerBetween, fossilMult, dig, tap, tick, tapOre,
-    lv, stage, compPower, compShown, sharedMult, turboOn, msCount,
+    levelUpMany, dugThisLife, lv, stage, compPower, compShown, sharedMult, turboOn, msCount,
     moneyMult, incomeRate, scheduleChest, tapChest,
     planet, layersFor, canEnterSpace, enterSpace, bossHp, bossReward, startBoss, bossOdds, constellations, canPray, prayerCost, pray, totalDepth, critChance, comboMult, oreFreq, totalLv,
     isUnlocked, levelCost, levelUp, skillCost, canBuySkill, buySkill, gearCost, buyGear, canUnlock, unlockNode, wallTool,

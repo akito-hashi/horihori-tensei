@@ -59,3 +59,10 @@ test("星めぐり：地球クリアのあと 2時間で 5つ以上の星を進�
     assert.ok(times[0] >= 3, `月 ${times[0]}分`);
   }
 });
+
+test("星めぐり：もっと先まで（30個）止まらずに進める（どの星も 60分以内）", () => {
+  const r = kinds.active[1];
+  const times = playSpace(r.game, { minutes: 900, maxPlanets: 30 });
+  assert.ok(times.length >= 30, `進んだ星 ${times.length}: ${times}`);
+  assert.ok(times.every((t) => t <= 60), String(times));
+});

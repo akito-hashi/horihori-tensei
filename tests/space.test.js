@@ -144,7 +144,7 @@ test("ボスに勝って星座が完成すると、知らせが出る", () => {
   assert.ok(evs.some((e) => e.type === "constellation" && e.name === "つるはし座"));
 });
 
-test("星の祈り：スキルツリーを全部開放するまで買えず、1回ごとに全員の掘る力とタップが +10%", () => {
+test("星の祈り：スキルツリーを全部開放するまで買えず、1回ごとに全員の掘る力とタップが ×1.1", () => {
   const g = inSpace();
   g.shards = 1e9;
   assert.equal(E.canPray(g), false);
@@ -158,7 +158,7 @@ test("星の祈り：スキルツリーを全部開放するまで買えず、1�
   assert.ok(E.prayerCost(g) > c0);
   assert.ok(Math.abs(E.autoPower(g) - a * 1.1) < 1e-6 * a);
   E.pray(g);
-  assert.ok(Math.abs(E.autoPower(g) - a * 1.2) < 1e-6 * a);
+  assert.ok(Math.abs(E.autoPower(g) - a * 1.1 * 1.1) < 1e-6 * a, "2回目は ×1.1 をもう一度（かけ算）");
 });
 
 test("宇宙で転生すると、いちばん先まで行った星の地表から始まり、かけらは地球の中心よりも多い", () => {
@@ -229,4 +229,61 @@ test("セーブの点検：深さと地層が食いちがっていたら、深�
   const m = g.life.money;
   E.dig(g, 1e6);
   assert.ok(g.life.money >= m);
+});
+
+test("宇宙で転生した直後（まだ掘っていない）は、かけらがもらえない（ただで何度も転生できない）", () => {
+  const g = inSpace();
+  g.space.best = 3; g.life.planet = 3; g.life.depth = E.planet(3).radius / 2;
+  assert.ok(E.rebirth(g));
+  assert.equal(E.rebirthShards(g), 0);
+  assert.equal(E.rebirth(g), null);
+  E.dig(g, 1e18);
+  assert.ok(E.rebirthShards(g) > 0, "掘ればもらえる");
+});
+
+test("地球から宇宙へ来た人生は、地球の分もふくめてかけらがもらえる", () => {
+  const g = inSpace();
+  assert.ok(E.rebirthShards(g) >= Math.floor(Math.sqrt(D.GOAL / D.SHARD_DIV)));
+});
+
+test("星の節目の時間は、その星に着いてからの時間でくらべる", () => {
+  const g = inSpace();
+  g.life.t = 500; // 地球で長く遊んだあと
+  g.life.lv = { mog: 1 };
+  E.tick(g, 0); // 何もしない
+  g.life.planetT = 500;
+  const third = E.planet(0).radius / 3;
+  g.life.t = 530;
+  const ev = E.dig(g, E.powerBetween(0, 0, third + 1, E.planet(0).layers)).events.find((e) => e.type === "milestone");
+  assert.equal(ev.t, 30);
+});
+
+test("名前を作った星は、何百個先まで名前がかぶらない", () => {
+  const names = new Set();
+  for (let k = 0; k < 800; k++) names.add(E.planet(k).name);
+  assert.equal(names.size, 800);
+});
+
+test("仲間をまとめて強化できる（10回・買えるだけ）", () => {
+  const g = E.newGame({ seed: 1 });
+  g.life.money = 1e6;
+  const r = E.levelUpMany(g, "mog", 10);
+  assert.equal(r.count, 10);
+  assert.equal(E.lv(g, "mog"), 10);
+  assert.equal(r.transformed, true, "とちゅうで変身したら分かる");
+  const before = g.life.money;
+  const all = E.levelUpMany(g, "mog", Infinity);
+  assert.ok(all.count > 0);
+  assert.ok(g.life.money < E.levelCost(g, "mog"), "買えるだけ買った");
+  assert.ok(g.life.money >= 0 && g.life.money < before);
+  const poor = E.newGame({ seed: 1 });
+  assert.equal(E.levelUpMany(poor, "mog", 10), false);
+});
+
+test("お金がとても大きくなっても、Infinity や NaN にならない", () => {
+  const g = inSpace();
+  g.life.money = 1e308;
+  E.dig(g, 1e300);
+  E.tick(g, 1);
+  assert.ok(Number.isFinite(g.life.money));
 });
