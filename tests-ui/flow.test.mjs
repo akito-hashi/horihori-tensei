@@ -446,7 +446,8 @@ test("クリア画面から「宇宙へ」で月へ。星の地層と色にな�
 });
 
 test("星の中心に着くとボスの案内が出て、挑むとHPと残り時間が出る。勝つと次の星へ", async () => {
-  const p = await open({ save: spaceSave((g) => { g.life.lv = { mog: 3000 }; }) });
+  // 数秒は戦いが続く強さ（月のボスを約 2〜3秒でたおせる）
+  const p = await open({ save: spaceSave((g) => { g.life.lv = { mog: 2300 }; }) });
   await click(p, '[data-act="continue"]');
   await p.waitForSelector("#core", { timeout: 8000 });
   assert.match(await text(p, "#core"), /うさぎ岩の番人/);
