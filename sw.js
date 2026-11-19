@@ -2,7 +2,7 @@
 // アプリのファイル：ネットから最新を取り、つながらないときだけ保存済みを使う。
 // 書体（Google Fonts）：一度読み込んだものを保存して使う。
 // ファイルを追加・改名したときは FILES を直し、VERSION の数字を上げる。
-const VERSION = "v6";
+const VERSION = "v7";
 const CACHE = "horihori-tensei-" + VERSION;
 const FONT_CACHE = "horihori-tensei-fonts";
 const FILES = [
@@ -67,7 +67,7 @@ self.addEventListener("fetch", (event) => {
         return res;
       })
       .catch(() =>
-        caches.match(req, { ignoreSearch: true })
+        caches.open(CACHE).then((c) => c.match(req, { ignoreSearch: true })) // 今の版の保存だけを見る（古い版と混ざらないように）
           .then((r) => r || (req.mode === "navigate" ? caches.match("./index.html") : null))
           .then((r) => r || Response.error())
       )

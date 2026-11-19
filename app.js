@@ -55,7 +55,7 @@
   const hms = (sec) => { const m = Math.round(sec / 60); return m >= 60 ? `${Math.floor(m / 60)}時間${m % 60}分` : `${m}分`; };
   const NODE = Object.fromEntries(D.TREE.map((n) => [n.id, n]));
   const LAYER_AT = Object.fromEntries(D.LAYERS.map((l) => [l.from, l]));
-  const BRANCHES = [["tap", "⛏️ 掘る力"], ["friend", "🧑‍🔧 仲間"], ["treasure", "💎 お宝"], ["tool", "🔑 道具"]];
+  const BRANCHES = [["tap", "⛏️ 掘る力"], ["friend", "🧑‍🔧 仲間"], ["treasure", "💎 お宝"], ["money", "💰 お金"], ["tool", "🔑 道具"]];
   const gaugePos = (d) => Math.log10(1 + d) / Math.log10(1 + D.GOAL);
   // 次の壁に必要で、まだ持っていない道具（いま壁にいるか、前の人生が壁で終わったとき）
   function neededTool() {
@@ -110,7 +110,7 @@
       const L = game.life;
       const marks = L.space ? "" : D.LAYERS.filter((l) => l.wall).map((l) => `<span class="w ${game.tree[l.wall] ? "ok" : ""}" style="top:${(gaugePos(l.from) * 100).toFixed(1)}%"></span>`).join("");
       return `<header class="hud">
-          <div class="top"><span>${game.lifeNo}回目の人生${L.space ? ` ・ ${E.planet(L.planet).icon} ${E.planet(L.planet).name}` : ""}</span><span class="sh">✦ <b class="num" id="shards">${N(game.shards)}</b>
+          <div class="top"><span id="where">${game.lifeNo}回目の人生${L.space ? ` ・ ${E.planet(L.planet).icon} ${E.planet(L.planet).name}` : ""}</span><span class="sh">✦ <b class="num" id="shards">${N(game.shards)}</b>
             <button data-act="sound" class="snd" aria-label="効果音のオンオフ">${S.isOn() ? "🔊" : "🔇"}</button></span></div>
           <div id="depth" class="depth num">${M(L.depth)}</div>
           <div class="row2"><span>💰 <b class="num" id="money">${N(L.money)}</b></span><span id="speed"></span></div>
@@ -118,7 +118,7 @@
         </header>
         <section id="pit" class="${L.space ? "space" : "L-" + E.layerOf(game).id}" tabindex="0" role="button" aria-label="タップで掘る">
           <span class="chip layerchip" id="layerchip"></span>
-          <div class="gauge" aria-hidden="true"><i id="gdot"></i>${marks}<b>${L.space ? E.planet(L.planet).bossIcon : "💎"}</b></div>
+          <div class="gauge" aria-hidden="true"><i id="gdot"></i>${marks}<b id="gicon">${L.space ? E.planet(L.planet).bossIcon : "💎"}</b></div>
           <div class="shaft" aria-hidden="true"></div>
           <div id="crew" aria-hidden="true"></div>
           <div id="dirtbox" aria-hidden="true"></div>
@@ -126,7 +126,8 @@
           <div id="toasts" aria-live="polite"></div>
         </section>
         <section class="dock">
-          <div class="tabs"><button data-tab="friends" aria-pressed="${ui.tab === "friends"}">仲間</button><button data-tab="me" aria-pressed="${ui.tab === "me"}">自分</button></div>
+          <div class="tabs"><button data-tab="friends" aria-pressed="${ui.tab === "friends"}">仲間</button><button data-tab="me" aria-pressed="${ui.tab === "me"}">自分</button>
+            <span class="buyn" aria-label="仲間をまとめて強化">${["1", "10", "max"].map((n) => `<button data-buyn="${n}" aria-pressed="${(ui.buyN || "1") === n}">${n === "max" ? "最大" : "×" + n}</button>`).join("")}</span></div>
           <div class="shop" id="shop"></div>
         </section>${navHtml()}`;
     },
@@ -239,7 +240,8 @@
           <div class="thead"><span class="hot" style="font-size:22px">🌌 星空</span><span class="soulchip num">✦ ${N(game.shards)}</span></div>
           <div class="glass pad"><div class="sub">たおした星 ${best}個 ・ いま ${game.life.space ? `${E.planet(game.life.planet).icon} ${E.planet(game.life.planet).name}` : "地球"}</div>
             <div class="stars">${stars || '<span class="sub">まだ星をたおしていない。地球をクリアして宇宙へ！</span>'}</div>
-            <div class="sub">あと ${next}個で 次の星座が完成</div></div>
+            <div class="sub">あと ${next}個で 次の星座が完成</div>
+            ${E.canEnterSpace(game) ? `<button class="btn" data-act="space" style="margin-top:6px">🚀 宇宙へ（星めぐり）</button>` : ""}</div>
           <div class="glass pad cons">${cs.length ? cs.map((x) => `<div>⭐ <b>${x.name}</b> ・ ${x.desc}</div>`).join("") : '<div class="sub">星を 3つたおすと、星座が 1つ完成する</div>'}</div>
           <div class="glass pad"><b>🙏 星の祈り</b>（いま +${pr * Math.round(D.PRAYER.mult * 100)}%）<div class="sub">${can ? "かけらを使って、仲間全員の掘る力とタップを +10%。何度でも祈れる" : "スキルツリーを全部開放すると祈れるようになる"}</div>
             <button class="btn" data-act="pray" ${can && game.shards >= cost ? "" : "disabled"} style="margin-top:6px">✦ ${N(cost)} で祈る</button></div>
@@ -316,7 +318,7 @@
     $("#money").textContent = N(L.money);
     $("#shards").textContent = N(game.shards);
     $("#speed").textContent = L.cleared ? "🏆 クリアずみ" : L.atWall ? "壁で止まっている" : `毎秒 +${M(E.autoSpeed(game))}`;
-    if (L.cleared && !$("#cleared")) pit.insertAdjacentHTML("beforeend", `<div id="wall" class="cleared" role="status"><b class="t" style="color:var(--gold)">🏆 地球の中心にクリアずみ！</b><br>転生すると、もっと速いクリアに挑戦できる。<button class="btn" data-nav="rebirth">✨ 転生する</button></div><span id="cleared"></span>`);
+    if (L.cleared && !$("#cleared")) pit.insertAdjacentHTML("beforeend", `<div id="wall" class="cleared" role="status"><b class="t" style="color:var(--gold)">🏆 地球の中心にクリアずみ！</b><br>${E.canEnterSpace(game) ? `星のしずくの力で宇宙へ行ける！<button class="btn" data-act="space">🚀 宇宙へ（星めぐり）</button>` : "転生すると、もっと速いクリアに挑戦できる。"}<button class="btn dark" data-nav="rebirth">✨ 転生する</button></div><span id="cleared"></span>`);
     const layer = E.layerOf(game);
     if (L.space) {
       if (!pit.classList.contains("space")) pit.className = "space";
@@ -329,6 +331,10 @@
     const hx = E.hardNow(game) / D.LAYERS[0].hard; // 土を 1 としたかたさ
     $("#layerchip").textContent = `${layer.icon} ${layer.name} ・ かたさ ×${hx < 10 ? hx.toFixed(1).replace(/\.0$/, "") : N(hx)}`;
     $("#gdot").style.top = (L.space ? (L.depth / E.planet(L.planet).radius) * 100 : gaugePos(L.depth) * 100).toFixed(2) + "%";
+    if (L.space) {
+      const wt = `${game.lifeNo}回目の人生 ・ ${E.planet(L.planet).icon} ${E.planet(L.planet).name}`;
+      if ($("#where").textContent !== wt) { $("#where").textContent = wt; $("#gicon").textContent = E.planet(L.planet).bossIcon; }
+    }
     if (L.space) $("#speed").textContent = L.boss ? "⚔️ ボス戦！" : L.atCore ? "中心に着いた！" : `毎秒 +${M(E.autoSpeed(game))}`;
     drawBoss();
     drawCrew();
@@ -343,6 +349,11 @@
     if (L.ore && L.ore.shown && !ore) {
       pit.insertAdjacentHTML("beforeend", `<button id="ore" class="${L.ore.kind === "rainbow" ? "rainbow" : ""}" style="left:${(L.ore.x * 100).toFixed(0)}%;top:${(L.ore.y * 100).toFixed(0)}%" aria-label="光る鉱石をタップ">💎</button>`);
     } else if (ore && !(L.ore && L.ore.shown)) ore.remove();
+    // 宝箱
+    const chest = $("#chest");
+    if (L.chest && L.chest.shown && !chest) {
+      pit.insertAdjacentHTML("beforeend", `<button id="chest" style="left:${(L.chest.x * 100).toFixed(0)}%;top:${(L.chest.y * 100).toFixed(0)}%" aria-label="宝箱をタップ">🎁</button>`);
+    } else if (chest && !(L.chest && L.chest.shown)) chest.remove();
     // ブースト
     const b = L.boost && L.t < L.boost.until ? L.boost : null;
     let bar = $("#boost");
@@ -376,12 +387,14 @@
     const p = E.planet(L.planet);
     if (L.atCore && !L.boss) {
       const o = E.bossOdds(game, 3);
-      const html = `<div class="bicon" aria-hidden="true">${p.bossIcon}</div><b class="t">${p.boss}</b><br>
-        HP <b class="num">${N(E.bossHp(L.planet))}</b> ・ ${D.BOSS.time}秒で勝負<br>勝てる見こみ：${oddsText(o)}
-        <button class="btn" data-act="boss">⚔️ ボスに挑む</button><span class="sub">勝てないときは仲間を強化するか、転生して強くなろう</span>`;
-      if (!core) pit.insertAdjacentHTML("beforeend", `<div id="core" role="status">${html}</div>`);
-      else if (ui.coreOdds !== Math.round(o * 20)) core.innerHTML = html;
-      ui.coreOdds = Math.round(o * 20);
+      const boosted = L.boost && L.t < L.boost.until;
+      if (!core) {
+        pit.insertAdjacentHTML("beforeend", `<div id="core" role="status"><span class="bicon" aria-hidden="true">${p.bossIcon}</span>
+          <div class="ci"><b class="t">${p.boss}</b><br><span id="odds"></span></div><button class="btn" data-act="boss">⚔️ 挑む</button></div>`);
+        ui.coreOdds = null;
+      }
+      const key = Math.round(o * 20) + (boosted ? "b" : "");
+      if (ui.coreOdds !== key) { $("#odds").innerHTML = `${oddsText(o)}${boosted ? ' <b style="color:#ffd23a">✨今がチャンス</b>' : ""}`; ui.coreOdds = key; }
     } else if (core) core.remove();
     if (L.boss) {
       const left = Math.max(0, L.boss.until - L.t), pct = (L.boss.hp / L.boss.max) * 100;
@@ -499,13 +512,21 @@
     clearTimeout(ui.toastTimer);
     ui.toastTimer = setTimeout(() => el.remove(), 3000);
   }
+  // 大きな知らせは 1つずつ順番に出す（続けて来たら前のが終わってから）
   function banner(s, b, d) {
-    const pit = $("#pit");
-    if (!pit) return;
+    ui.bannerQ = ui.bannerQ || [];
+    ui.bannerQ.push([s, b, d]);
+    if (!ui.bannerOn) nextBanner();
+  }
+  function nextBanner() {
+    const pit = $("#pit"), item = ui.bannerQ && ui.bannerQ.shift();
+    if (!item || !pit) { ui.bannerOn = false; if (ui.bannerQ) ui.bannerQ.length = 0; return; }
+    const [s, b, d] = item;
     const old = $("#banner"); if (old) old.remove();
     pit.insertAdjacentHTML("beforeend", `<div id="banner"><div class="s">${s}</div><div class="b hot">${b}</div>${d ? `<div class="d">${d}</div>` : ""}</div>`);
     const el = $("#banner");
-    setTimeout(() => el && el.remove(), 2600);
+    ui.bannerOn = true;
+    setTimeout(() => { if (el) el.remove(); nextBanner(); }, 2600);
   }
   function confettiSmall() {
     if (reduceMotion()) return;
@@ -571,11 +592,11 @@
       else if (e.type === "core") { toast(`${E.planet(e.planet).bossIcon} 星の中心に着いた！ ボスが待っている`); S.play("wall"); }
       else if (e.type === "bossWin") { save(); S.play("clear"); banner("VICTORY", `🎉 ${E.planet(e.planet).boss}をたおした！`, `ごほうび 💰 +${N(e.reward)}`); confettiSmall(); }
       else if (e.type === "bossFail") { S.play("wall"); banner("TIME UP", "時間切れ…", "仲間を強くして、もう一度挑もう"); }
-      else if (e.type === "constellation") { toast(`⭐ 星座「${e.name}」が完成！ ${e.desc}`); ui.pendingBanner = ["CONSTELLATION", `⭐ ${e.name} 完成！`, e.desc]; }
+      else if (e.type === "constellation") { toast(`⭐ 星座「${e.name}」が完成！ ${e.desc}`); banner("CONSTELLATION", `⭐ ${e.name} 完成！`, e.desc); }
       else if (e.type === "planet") {
         const p = E.planet(e.planet);
         save();
-        setTimeout(() => { if (ui.view === "dig") { render(); banner("NEXT STAR", `🚀 ${p.icon} ${p.name}へ！`, ui.pendingBanner ? `${ui.pendingBanner[1]}（${ui.pendingBanner[2]}）` : `ボス：${p.boss}`); ui.pendingBanner = null; } }, reduceMotion() ? 0 : 1600);
+        banner("NEXT STAR", `🚀 ${p.icon} ${p.name}へ！`, `ボス：${p.boss}`);
       }
     }
   }
@@ -622,7 +643,7 @@
 
   app.addEventListener("pointerdown", (ev) => {
     if (ui.view !== "dig" || ev.button > 0) return;
-    if (ev.target.closest("#ore,#wall,#core,button")) return;
+    if (ev.target.closest("#ore,#chest,#wall,#core,button")) return;
     if (!ev.target.closest("#pit")) return;
     ev.preventDefault();
     digTap(ev);
@@ -632,18 +653,33 @@
   });
 
   app.addEventListener("click", (ev) => {
-    if (ui.view === "credits" && !ev.target.closest("button")) { const r = $("#roll"); if (r) r.classList.toggle("fast"); return; }
+    if (ui.view === "credits" && !ev.target.closest("button")) {
+      const a = $(".rollin") && $(".rollin").getAnimations()[0];
+      if (a) a.playbackRate = a.playbackRate === 4 ? 1 : 4;
+      return;
+    }
     const el = ev.target.closest("button");
     if (!el || el.disabled) return;
     const d = el.dataset;
+    if (el.id === "chest") {
+      const r = E.tapChest(game);
+      if (r) {
+        const pit = $("#pit"), pr = pit.getBoundingClientRect(), b = el.getBoundingClientRect();
+        floatNum(b.left - pr.left + b.width / 2, b.top - pr.top, `💰 +${N(r.money)}`, "crit");
+        S.play("fossil"); save();
+      }
+      update(false);
+      return;
+    }
     if (el.id === "ore") {
       const r = E.tapOre(game);
       if (r) { S.play(r.kind === "rainbow" ? "rainbow" : "ore"); banner(r.kind === "rainbow" ? "RAINBOW" : "BOOST", `${r.kind === "rainbow" ? "🌈" : "✨"} ×${r.mult}！`, `${r.dur}秒間 ぜんぶ ${r.mult}倍`); }
       update(false);
       return;
     }
+    if (d.buyn) { ui.buyN = d.buyn; app.querySelectorAll("[data-buyn]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.buyn === ui.buyN))); return; }
     if (d.lvup) {
-      const r = E.levelUp(game, d.lvup);
+      const r = E.levelUpMany(game, d.lvup, ui.buyN === "max" ? Infinity : +(ui.buyN || 1));
       if (r) {
         const c = COMP[d.lvup];
         save();

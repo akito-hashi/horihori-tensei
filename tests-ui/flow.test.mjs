@@ -512,3 +512,88 @@ test("宇宙で転生すると、いちばん先の星の地表から始まる",
   assert.equal(s.game.life.planet, 3);
   assert.equal(s.game.life.depth < 10, true);
 });
+
+test("スキルツリーに「お金」の枝があり、画面に収まる", async () => {
+  const p = await open({ save: mk((g) => { g.shards = 10; }) });
+  await click(p, '[data-act="continue"]');
+  await click(p, '[data-nav="tree"]');
+  assert.match(await text(p, ".tlabels"), /お金/);
+  await click(p, '[data-node="m1"]');
+  assert.match(await text(p, ".detail"), /お小づかい/);
+  await click(p, '[data-act="unlock"]');
+  await saveNow(p);
+  assert.equal((await saved(p)).game.tree.m1, true);
+  assert.ok(await fits(p));
+});
+
+test("宝箱が出たらタップでお金がもらえる", async () => {
+  const p = await open({ save: mk((g) => { g.tree.m3 = true; g.life.lv.mog = 10; g.life.chest = { shown: false, next: 0.3, shownAt: null, x: 0.5, y: 0.5 }; }) });
+  await click(p, '[data-act="continue"]');
+  await p.waitForSelector("#chest", { timeout: 3000 });
+  await saveNow(p);
+  const before = (await saved(p)).game.life.money;
+  await click(p, "#chest");
+  await saveNow(p);
+  assert.ok((await saved(p)).game.life.money > before);
+  assert.equal(await p.$("#chest"), null);
+});
+
+test("クリアしたあと掘る画面に戻っても、そこから「宇宙へ」行ける。星空の画面からも行ける", async () => {
+  const p = await open({ save: mk((g) => {
+    for (const id of ["suit", "drill", "starpick"]) g.tree[id] = true;
+    g.life.layer = 6; g.life.depth = D.GOAL; g.life.cleared = true; g.cleared = true;
+    g.clears = [{ lifeNo: 1, totalTime: 6000, lifeTime: 6000 }];
+  }) });
+  await click(p, '[data-act="continue"]');
+  await click(p, '[data-nav="dig"]');
+  assert.ok(await p.$('#pit [data-act="space"]'), "掘る画面のクリアの案内に「宇宙へ」");
+  await click(p, '[data-nav="sky"]');
+  await click(p, '[data-act="space"]');
+  assert.equal(await screen(p), "dig");
+  assert.match(await text(p, "#layerchip"), /月/);
+});
+
+test("星の中心のボスの案内は穴の下のほうに出て、真ん中をタップすればお金を掘れる", async () => {
+  const p = await open({ save: spaceSave((g) => { Object.assign(g.life, { lv: { mog: 5 }, depth: 1737000, layer: 2, atCore: true }); }) });
+  await click(p, '[data-act="continue"]');
+  await p.waitForSelector("#core");
+  const [pit, core] = await p.evaluate(() => [document.querySelector("#pit").getBoundingClientRect().toJSON(), document.querySelector("#core").getBoundingClientRect().toJSON()]);
+  assert.ok(core.top > pit.top + pit.height * 0.45, "下のほう");
+  assert.ok(core.bottom <= pit.bottom + 1, "はみ出さない");
+  await saveNow(p);
+  const before = (await saved(p)).game.life.money;
+  await p.touchscreen.tap(pit.x + pit.width / 2, pit.y + pit.height * 0.3);
+  await saveNow(p);
+  assert.ok((await saved(p)).game.life.money > before);
+});
+
+test("仲間は「×10」「最大」でまとめて強化できる", async () => {
+  const p = await open({ save: mk((g) => { g.life.money = 1e6; }) });
+  await click(p, '[data-act="continue"]');
+  await click(p, '[data-buyn="10"]');
+  await click(p, '[data-lvup="mog"]');
+  await saveNow(p);
+  assert.equal((await saved(p)).game.life.lv.mog, 10);
+  await click(p, '[data-buyn="max"]');
+  await click(p, '[data-lvup="mog"]');
+  await saveNow(p);
+  assert.ok((await saved(p)).game.life.lv.mog > 10);
+});
+
+test("エンドロールはタップすると、とちゅうから 4倍速になる（飛ばない）", async () => {
+  const p = await open({ save: mk((g) => {
+    for (const id of ["suit", "drill", "starpick"]) g.tree[id] = true;
+    g.life.layer = 6; g.life.depth = D.GOAL; g.life.cleared = true; g.cleared = true;
+    g.clears = [{ lifeNo: 1, totalTime: 6000, lifeTime: 6000 }];
+  }) });
+  await click(p, '[data-act="continue"]');
+  await click(p, '[data-act="records"]');
+  await click(p, '[data-act="credits"]');
+  await wait(600);
+  const y0 = await p.$eval(".rollin", (e) => e.getBoundingClientRect().top);
+  await click(p, "#roll");
+  const y1 = await p.$eval(".rollin", (e) => e.getBoundingClientRect().top);
+  assert.ok(Math.abs(y1 - y0) < 40, `飛ばない ${y0} → ${y1}`);
+  assert.equal(await p.$eval(".rollin", (e) => e.getAnimations()[0].playbackRate), 4);
+  assert.equal(await screen(p), "credits");
+});

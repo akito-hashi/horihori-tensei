@@ -143,3 +143,19 @@ test("「動きを減らす」設定では、強化したときの光が残ら�
   const glow = await p.$eval('#pit [data-comp="me"]', (e) => getComputedStyle(e, "::before").content);
   assert.ok(glow === "none" || glow === "normal", glow);
 });
+
+test("「動きを減らす」設定でも、ボスに勝った知らせが出る", async () => {
+  const p = await page();
+  await p.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "reduce" }]);
+  await p.goto(BASE);
+  const g = E.newGame({ seed: 2 });
+  for (const id of ["suit", "drill", "starpick"]) g.tree[id] = true;
+  g.cleared = true; g.clears = [{ lifeNo: 1, totalTime: 600, lifeTime: 600 }];
+  Object.assign(g.life, { space: true, planet: 0, startPlanet: 0, depth: 1737000, layer: 2, atCore: true, lv: { mog: 2300 } });
+  await p.evaluate((s) => localStorage.setItem("horihori-tensei-v1", JSON.stringify(s)), { v: 1, game: g });
+  await p.reload();
+  await p.$eval('[data-act="continue"]', (e) => e.click());
+  await p.waitForSelector('[data-act="boss"]');
+  await p.$eval('[data-act="boss"]', (e) => e.click());
+  await p.waitForFunction(() => /たおした/.test(document.querySelector("#banner")?.textContent || ""), { timeout: 8000 });
+});
