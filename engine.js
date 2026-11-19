@@ -417,11 +417,12 @@
     return L.boss;
   }
   // 30秒で削れる見こみ（1 以上なら勝てそう）
-  function bossOdds(game, tapsPerSec = 3) {
+  function bossOdds(game, tapsPerSec = 3, withBoost = false) {
     const L = game.life;
     const taps = tapsPerSec + (has(game, "t6") ? D.AUTO_TAP : 0);
-    // ブーストは数えない（見こみがブーストの始まり・終わりでぶれないように）
-    const dps = autoRaw(game) + (tapPower(game) / boostMult(game)) * (1 + 9 * critChance(game)) * taps;
+    // ふだんはブーストを数えない（見こみがブーストの始まり・終わりでぶれないように）
+    const bm = withBoost ? boostMult(game) : 1;
+    const dps = (autoRaw(game) + (tapPower(game) / boostMult(game)) * (1 + 9 * critChance(game)) * taps) * bm;
     return (dps * D.BOSS.time) / bossHp(L.space ? L.planet : 0);
   }
   function bossCheck(game, events) {
@@ -695,7 +696,7 @@
 
   return {
     newGame, layerOf, tapPower, autoPower, autoSpeed, hardNow, hardAt, powerBetween, fossilMult, dig, tap, tick, tapOre,
-    levelUpMany, dugThisLife, lv, stage, compPower, compShown, sharedMult, turboOn, msCount,
+    levelUpMany, dugThisLife, boostMult, lv, stage, compPower, compShown, sharedMult, turboOn, msCount,
     moneyMult, incomeRate, scheduleChest, tapChest,
     planet, layersFor, canEnterSpace, enterSpace, bossHp, bossReward, startBoss, bossOdds, constellations, canPray, prayerCost, pray, totalDepth, critChance, comboMult, oreFreq, totalLv,
     isUnlocked, levelCost, levelUp, skillCost, canBuySkill, buySkill, gearCost, buyGear, canUnlock, unlockNode, wallTool,

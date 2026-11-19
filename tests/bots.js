@@ -139,7 +139,7 @@ function playSpace(g, opt = {}) {
       if (!L.boss) shop(g, opt.tapsPerSec);
       if (L.atCore && !L.boss) {
         if (coreSince == null) coreSince = L.t;
-        const odds = E.bossOdds(g, opt.tapsPerSec);
+        const odds = E.bossOdds(g, opt.tapsPerSec, true); // 光る鉱石のブースト中なら、そのぶん強い
         if (odds >= 1.15) E.startBoss(g);
         if (odds > bestOdds * 1.05) { bestOdds = odds; coreSince = L.t; }
         // 中心で 4分たっても見こみが伸びない → 転生
