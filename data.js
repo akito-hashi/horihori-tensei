@@ -129,5 +129,41 @@
   // 転生でもらえる星のかけら = floor(√(最高の深さ ÷ SHARD_DIV))
   const SHARD_DIV = 60;
 
-  return { GOAL, LAYERS, COMPANIONS, COST_GROWTH, LV_MILESTONES, SKILLS, TURBO, GEAR, COMBO, AUTO_TAP, TREE, FOSSILS, FOSSIL_BONUS, MILESTONES, ORE, SHARD_DIV };
+  // ---- エンドレスモード「星めぐり」（地球をクリアしたあと） ----
+  // 名前のある 7つの星のあとは、名前を作った星がいくらでも続く（engine.js の planet()）
+  const PLANETS = [
+    { name: "月", icon: "🌕", radius: 1737000, boss: "うさぎ岩の番人", bossIcon: "🐰", colors: ["#cfd3da", "#9aa0aa", "#6a707a"], layerNames: ["月の砂", "月の岩盤", "月のコア"] },
+    { name: "火星", icon: "🔴", radius: 3390000, boss: "赤いサソリ岩", bossIcon: "🦂", colors: ["#e07a4a", "#b04a2a", "#7a2a1a"], layerNames: ["赤い砂", "火星の岩盤", "火星のコア"] },
+    { name: "木星", icon: "🟠", radius: 7000000, boss: "嵐のドラゴン", bossIcon: "🐉", colors: ["#e8c89a", "#c8905a", "#8a5a3a"], layerNames: ["うずまく雲", "金属の海", "木星のコア"] },
+    { name: "土星", icon: "🪐", radius: 6000000, boss: "リングの守り神", bossIcon: "💍", colors: ["#f0dca0", "#c8b070", "#8a7040"], layerNames: ["輪のかけら", "黄金の雲", "土星のコア"] },
+    { name: "天王星", icon: "🔵", radius: 5100000, boss: "氷の巨人", bossIcon: "🧊", colors: ["#a8e8f0", "#70c0d8", "#3a8aa8"], layerNames: ["氷の霧", "青い氷", "天王星のコア"] },
+    { name: "海王星", icon: "🌀", radius: 4900000, boss: "深海クジラ", bossIcon: "🐋", colors: ["#5a8ae8", "#3a5ac8", "#1a2a8a"], layerNames: ["風の海", "深い青", "海王星のコア"] },
+    { name: "冥王星", icon: "⚪", radius: 1188000, boss: "さいはての門番", bossIcon: "🗿", colors: ["#e8dcd0", "#b8a898", "#7a6a5a"], layerNames: ["ちっ素の雪", "ハートの氷原", "冥王星のコア"] },
+  ];
+  const PLANET_GEN = {
+    syll: ["きら", "ぽぽ", "るな", "めろ", "ぴか", "そら", "ころ", "みる", "ふわ", "とろ", "ぱる", "りん", "もこ", "ぷに", "ゆめ", "ほし"],
+    icons: ["🌟", "💫", "🌑", "🪨", "🔮", "🍩", "💠", "🌈"],
+    bosses: ["岩のゴーレム", "ほうき星の竜", "まぼろしの巨人", "星くいモンスター", "光の騎士", "ブラックホールねこ"],
+    bossIcons: ["🗿", "🐲", "👹", "👾", "🛡️", "🐈‍⬛"],
+  };
+  // 星 k の地層のかたさ = h0 × hg^k × layerHard[i]。1m あたりのお金 = v0 × vg^k × layerHard[i]
+  const SPACE = { h0: 40000, hg: 3, v0: 60000, vg: 2.6, layerHard: [1, 1.6, 2.5], grow: 0.5 };
+  // ボス：HP = base × growth^k（掘る力と同じ単位）。time 秒以内に倒す。ごほうび = HP ぶん掘ったときのお金 × reward
+  const BOSS = { time: 30, base: 5e11, growth: 3.2, reward: 1 };
+  // 星を 3つ倒すごとに 1つ完成する星座（ずっと続くボーナス）。表のあとは「タップ ×2」と「仲間 ×2」を交互に
+  const STARS_PER_CONSTELLATION = 3;
+  const CONSTELLATIONS = [
+    { name: "つるはし座", desc: "タップ ×2", tap: 2 },
+    { name: "モグラ座", desc: "仲間全員の掘る力 ×2", auto: 2 },
+    { name: "流れ星座", desc: "光る鉱石が出やすい（×1.5）", ore: 1.5 },
+    { name: "ドリル座", desc: "仲間全員の掘る力 ×2", auto: 2 },
+    { name: "王冠座", desc: "会心の一撃が出やすい（+5%）", crit: 0.05 },
+    { name: "宝石座", desc: "掘って入るお金 ×2", money: 2 },
+  ];
+  const MORE_CONSTELLATIONS = ["ねこ座", "くじら座", "ほうき座", "ランタン座", "かぎ座", "ロケット座", "ほたる座", "ボタン座", "おにぎり座", "かさ座"];
+  // 星の祈り（スキルツリーを全部開放したあと、かけらで何度でも）：1回ごとに掘る力・タップ +mult
+  const PRAYER = { base: 80, growth: 1.3, mult: 0.1 };
+
+  return { PLANETS, PLANET_GEN, SPACE, BOSS, STARS_PER_CONSTELLATION, CONSTELLATIONS, MORE_CONSTELLATIONS, PRAYER,
+    GOAL, LAYERS, COMPANIONS, COST_GROWTH, LV_MILESTONES, SKILLS, TURBO, GEAR, COMBO, AUTO_TAP, TREE, FOSSILS, FOSSIL_BONUS, MILESTONES, ORE, SHARD_DIV };
 });
