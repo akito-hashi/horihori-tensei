@@ -3,8 +3,8 @@
   const hex = (r, g, b) => "#" + [r, g, b].map((v) => Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, "0")).join("");
   // [赤, 緑, 青] の強さ（0〜1）。光を当てた明るさにかけて、岩の色にする
   const LAYER = {
-    soil: [0.46, 0.36, 0.3], rock: [0.42, 0.38, 0.36], fossil: [0.6, 0.52, 0.4], crust: [0.36, 0.28, 0.22],
-    mantle: [0.5, 0.28, 0.2], outer: [0.58, 0.38, 0.18], inner: [0.6, 0.52, 0.28],
+    soil: [0.52, 0.37, 0.26], rock: [0.4, 0.4, 0.42], fossil: [0.64, 0.55, 0.4], crust: [0.34, 0.26, 0.2],
+    mantle: [0.66, 0.26, 0.15], outer: [0.7, 0.42, 0.15], inner: [0.72, 0.6, 0.26],
   };
   function fromRGB([r, g, b], light) {
     const f = (v) => +v.toFixed(3);

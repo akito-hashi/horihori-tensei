@@ -685,3 +685,75 @@ test("自分はタップで振ったあとも、また呼吸の動きにもど�
   const an = await p.$eval('#pit [data-comp="me"] .sb', (e) => e.getAnimations().map((a) => `${a.animationName}:${a.playState}`));
   assert.ok(an.includes("breathe:running"), String(an));
 });
+
+// ===== 落ち着いた坑道（穴の作り直し） =====
+const crewBoxes = (p) => p.$$eval("#pit .tun", (els) => els.map((e) => { const r = e.querySelector(".who").getBoundingClientRect(); return { id: e.dataset.comp, x: r.left + r.width / 2, w: r.width, top: r.top, bottom: r.bottom }; }).sort((a, b) => a.x - b.x));
+
+test("穴の中は 左からガンさん・モグ・自分・ソコ・ドリルンの一列で、となりと重ならない", async () => {
+  const p = await open({ save: allCrew() });
+  await click(p, '[data-act="continue"]');
+  await wait(200);
+  const b = await crewBoxes(p);
+  assert.deepEqual(b.map((x) => x.id), ["gan", "mog", "me", "soko", "drill"]);
+  for (let i = 1; i < b.length; i++) assert.ok(b[i].x - b[i - 1].x >= 0.62 * (b[i].w + b[i - 1].w) / 2, `${b[i - 1].id} と ${b[i].id} が重なる`);
+  const feet = b.map((x) => Math.round(x.top + x.w * 0.79));
+  assert.ok(Math.max(...feet) - Math.min(...feet) <= 6, `足の高さがそろっていない ${feet}`);
+  const pr = await p.$eval("#pit", (e) => { const r = e.getBoundingClientRect(); return { top: r.top, bottom: r.bottom }; });
+  const tags = await p.$$eval("#pit .lvtag", (els) => els.map((e) => { const r = e.getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, b: r.bottom, txt: e.textContent }; }));
+  assert.equal(tags.length, 4);
+  for (const t of tags) { assert.match(t.txt, /^Lv\.\d+$/); assert.ok(t.t >= pr.top && t.b <= pr.bottom, "名札が穴の外"); }
+  tags.sort((a, c) => a.l - c.l);
+  for (let i = 1; i < tags.length; i++) assert.ok(tags[i].l >= tags[i - 1].r, "名札どうしが重なる");
+  assert.equal(await p.$("#pit .hole"), null, "床のくぼみはない");
+  assert.ok(await fits(p));
+});
+
+test("仲間が 0人でも穴は崩れず、自分は真ん中に立つ", async () => {
+  const p = await open({ save: mk() });
+  await click(p, '[data-act="continue"]');
+  const b = await crewBoxes(p);
+  assert.deepEqual(b.map((x) => x.id), ["me"]);
+  const pr = await p.$eval("#pit", (e) => { const r = e.getBoundingClientRect(); return r.left + r.width / 2; });
+  assert.ok(Math.abs(b[0].x - pr) < 4);
+  assert.ok(await fits(p));
+});
+
+test("穴の背景は岩肌の絵で、タップしても揺れず、時間がたっても動かない", async () => {
+  const p = await open({ save: allCrew() });
+  await click(p, '[data-act="continue"]');
+  const bg = () => p.$eval("#pit", (e) => { const s = getComputedStyle(e); return [s.backgroundImage.includes("svg+xml"), s.backgroundImage.length, s.backgroundPosition, s.transform]; });
+  const a = await bg();
+  assert.equal(a[0], true, "岩肌の絵");
+  assert.ok(await p.$("#pit svg.cave"), "部屋の形");
+  for (let i = 0; i < 12; i++) { await tapPit(p, 1); await wait(30); }
+  assert.equal(await p.$("#pit.shake"), null);
+  await wait(600);
+  const z = await bg();
+  assert.deepEqual(z.slice(2), a.slice(2), "背景の位置と変形が変わらない（地層が変わって色が変わるのはよい）");
+});
+
+test("地層の名前とかたさ、深さのゲージは上の帯の中にある", async () => {
+  const p = await open({ save: allCrew() });
+  await click(p, '[data-act="continue"]');
+  assert.ok(await p.$(".hud #layerchip"));
+  assert.ok(await p.$(".hud .gauge #gdot"));
+  assert.equal(await p.$("#pit #layerchip"), null);
+});
+
+test("光る鉱石は床に転がる金塊の絵。虹色は真珠色の金塊", async () => {
+  for (const [kind, img] of [["gold", "ui-nugget.webp"], ["rainbow", "ui-nugget-pearl.webp"]]) {
+    const s = allCrew(); s.game.life.ore = { shown: true, next: 0, kind, shownAt: 0, x: 0.3, y: 0.4 };
+    const p = await open({ save: s });
+    await click(p, '[data-act="continue"]');
+    await p.waitForSelector("#ore img", { timeout: 3000 });
+    assert.ok((await p.$eval("#ore img", (e) => e.getAttribute("src"))).endsWith(img), kind);
+    assert.equal(await p.$eval("#ore", (e) => getComputedStyle(e).filter), "none", "光らせない");
+  }
+});
+
+test("動きを減らす設定では、タップしても土のかけらが飛ばない", async () => {
+  const p = await open({ save: allCrew(), reduce: true });
+  await click(p, '[data-act="continue"]');
+  await tapPit(p, 5);
+  assert.equal(await p.$$eval("#dirtbox > *", (e) => e.length), 0);
+});
