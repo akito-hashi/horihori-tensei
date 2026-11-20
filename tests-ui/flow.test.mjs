@@ -779,7 +779,8 @@ test("タイトル画面には 5人が並び、はみ出さない", async () => 
 });
 
 test("色は落ち着いた坑道（こげ茶の背景・琥珀色のボタン）で、光のにじみがない", async () => {
-  const p = await open({ save: allCrew() });
+  const s = allCrew(); s.game.life.money = 1e30; // 強化ボタンが買える色になるように
+  const p = await open({ save: s });
   await click(p, '[data-act="continue"]');
   const st = await p.evaluate(() => {
     const cs = (sel) => getComputedStyle(document.querySelector(sel));
@@ -801,4 +802,39 @@ test("ツリー・図鑑・転生・記録・星空の画面もはみ出さな�
   }
   await click(p, '[data-act="records"]');
   assert.ok(await fits(p), "records");
+});
+
+test("ブースト中の帯はきちんと表示され、回る光の背景は出ない", async () => {
+  const s = allCrew(); s.game.life.ore = { shown: true, next: 0, kind: "gold", shownAt: 0, x: 0.5, y: 0.5 };
+  const p = await open({ save: s });
+  await click(p, '[data-act="continue"]');
+  await p.waitForSelector("#ore", { timeout: 3000 });
+  await click(p, "#ore");
+  await p.waitForSelector("#boost", { timeout: 3000 });
+  assert.equal(await p.$eval("#boost", (e) => getComputedStyle(e).display), "flex");
+  assert.equal(await p.$("#rays, .rays"), null);
+});
+
+test("宇宙では星ごとの色の岩肌になる（月と火星はちがう色）", async () => {
+  const bgOf = async (planet) => {
+    const s = allCrew(); const g = s.game;
+    g.cleared = true; g.clears = [{ lifeNo: 1, totalTime: 1, lifeTime: 1 }];
+    Object.assign(g.life, { space: true, planet, layer: 0, depth: 1000 }); g.space.best = planet;
+    const p = await open({ save: s });
+    await click(p, '[data-act="continue"]');
+    return p.$eval("#pit", (e) => getComputedStyle(e).backgroundImage);
+  };
+  const moon = await bgOf(0), mars = await bgOf(1);
+  assert.match(moon, /svg/);
+  assert.notEqual(moon, mars);
+});
+
+test("ガンさんとドリルンも、穴の端で切れない", async () => {
+  const p = await open({ save: allCrew() });
+  await click(p, '[data-act="continue"]');
+  const r = await p.evaluate(() => {
+    const pr = document.querySelector("#pit").getBoundingClientRect();
+    return ["gan", "drill"].map((id) => { const b = document.querySelector(`#pit [data-comp="${id}"] .who`).getBoundingClientRect(); return [b.left - pr.left, pr.right - b.right]; });
+  });
+  for (const [l, rr] of r) assert.ok(l >= -2 && rr >= -2, String(r));
 });

@@ -83,7 +83,7 @@ test("サービスワーカーが保存するファイルは、すべて実在�
   const files = [...sw.matchAll(/"\.\/([^"]*)"/g)].map((m) => m[1]).filter(Boolean);
   assert.ok(files.length >= 6);
   for (const f of files) assert.ok(fs.existsSync(path.join(ROOT, f)), f);
-  for (const f of ["index.html", "style.css", "data.js", "engine.js", "chars.js", "app.js", "sfx.js", "pics.js", "sprites/manifest.js"]) assert.ok(files.includes(f), `${f} が sw.js にない`);
+  for (const f of ["index.html", "style.css", "data.js", "engine.js", "chars.js", "app.js", "sfx.js", "pics.js", "pit.js", "sprites/manifest.js"]) assert.ok(files.includes(f), `${f} が sw.js にない`);
   assert.match(sw, /importScripts\("\.\/sprites\/manifest\.js"\)/, "絵の一覧を読み込んで、全部の絵を保存する");
   assert.match(sw, /SPRITES\.files/);
 });

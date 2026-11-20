@@ -360,7 +360,7 @@
     // 光る鉱石
     const ore = $("#ore");
     if (L.ore && L.ore.shown && !ore) {
-      pit.insertAdjacentHTML("beforeend", `<button id="ore" class="${L.ore.kind === "rainbow" ? "rainbow" : ""}" style="left:${(12 + L.ore.x * 76).toFixed(0)}%" aria-label="光る鉱石をタップ"><img src="sprites/${L.ore.kind === "rainbow" ? "ui-nugget-pearl" : "ui-nugget"}.webp" alt=""></button>`);
+      pit.insertAdjacentHTML("beforeend", `<button id="ore" class="${L.ore.kind === "rainbow" ? "rainbow" : ""}" style="left:${(12 + L.ore.x * 76).toFixed(0)}%" aria-label="光る鉱石をタップ">${UI(L.ore.kind === "rainbow" ? "nugget-pearl" : "nugget", "") || "💎"}</button>`);
     } else if (ore && !(L.ore && L.ore.shown)) ore.remove();
     // 宝箱
     const chest = $("#chest");
@@ -371,10 +371,10 @@
     const b = L.boost && L.t < L.boost.until ? L.boost : null;
     let bar = $("#boost");
     if (b) {
-      if (!bar) { $("#boostslot").insertAdjacentHTML("beforeend", '<div id="boost"></div>'); if (!reduceMotion()) pit.insertAdjacentHTML("afterbegin", '<div class="rays" id="rays"></div>'); bar = $("#boost"); }
+      if (!bar) { $("#boostslot").insertAdjacentHTML("beforeend", '<div id="boost"></div>'); bar = $("#boost"); }
       bar.className = b.kind === "rainbow" ? "rainbow" : "";
       bar.innerHTML = `<span>${b.kind === "rainbow" ? "🌈 虹の鉱石" : "✨ 光る鉱石"} ブースト ×${b.mult}</span><span class="num">残り ${Math.ceil(b.until - L.t)}秒</span>`;
-    } else if (bar) { bar.remove(); const r = $("#rays"); if (r) r.remove(); }
+    } else if (bar) bar.remove();
     // 壁
     const wall = $("#wall");
     const tool = L.cleared ? null : E.wallTool(game);
@@ -468,10 +468,12 @@
   // 穴の岩肌（地層・星ごとの色）。背景は動かさない
   function rockBg(pit) {
     const L = game.life;
-    const key = L.space ? "p" + L.planet : E.layerOf(game).id;
+    const layer = E.layerOf(game);
+    const key = L.space ? `p${L.planet}-${layer.id}` : layer.id;
     if (pit.dataset.bg === key || !window.Pit) return;
     pit.dataset.bg = key;
-    ui.rock = Pit.rockStyle(L.space ? { planet: L.planet } : { layer: key });
+    // 宇宙では、その星の地層に決めてある色で岩肌を作る
+    ui.rock = Pit.rockStyle(L.space ? (layer.color ? { color: layer.color } : { planet: L.planet }) : { layer: key });
     pit.style.backgroundImage = `repeating-linear-gradient(176deg, rgba(255,200,150,.05) 0 22px, rgba(0,0,0,.1) 22px 30px, rgba(255,255,255,.03) 30px 58px, rgba(0,0,0,.08) 58px 64px), url("${Pit.rockTile(ui.rock)}")`;
     pit.style.backgroundSize = "auto, 256px 256px";
   }

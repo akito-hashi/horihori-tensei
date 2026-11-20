@@ -19,9 +19,25 @@
     const [r, g, b] = [[c, x, 0], [x, c, 0], [0, c, x], [0, x, c], [x, 0, c], [c, 0, x]][Math.floor(h) % 6];
     return [r + m, g + m, b + m];
   }
+  // "#rrggbb" か "hsl(H S% L%)" を [r, g, b]（0〜1）に。読めなければ null
+  function parse(c) {
+    let m = /^#([0-9a-f]{6})$/i.exec(c || "");
+    if (m) return [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16) / 255);
+    m = /^hsl\(\s*([\d.]+)(?:deg)?[\s,]+([\d.]+)%[\s,]+([\d.]+)%\s*\)$/i.exec(c || "");
+    if (!m) return null;
+    const h = (+m[1] % 360) / 60, s = +m[2] / 100, l = +m[3] / 100;
+    const C = (1 - Math.abs(2 * l - 1)) * s, X = C * (1 - Math.abs((h % 2) - 1)), o = l - C / 2;
+    const [r, g, b] = [[C, X, 0], [X, C, 0], [0, C, X], [0, X, C], [X, 0, C], [C, 0, X]][Math.floor(h) % 6];
+    return [r + o, g + o, b + o];
+  }
   function rockStyle(where) {
     const w = where || {};
-    if (w.planet != null) return fromRGB(planetRGB(Math.max(1, Math.floor(w.planet) || 1)), "#e8e4f0");
+    if (w.color != null) {
+      const rgb = parse(w.color);
+      // 地層の色をそのまま使うと明るすぎるので、落ち着いた暗さにそろえる
+      return rgb ? fromRGB(rgb.map((v) => +(0.12 + v * 0.62).toFixed(3)), "#e8e4f0") : fromRGB(LAYER.soil, "#e8d8c4");
+    }
+    if (w.planet != null) return fromRGB(planetRGB(Math.max(0, Math.floor(w.planet) || 0) + 1), "#e8e4f0");
     return fromRGB(LAYER[w.layer] || LAYER.soil, "#e8d8c4");
   }
   function rockTile(st) {

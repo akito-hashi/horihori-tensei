@@ -4,7 +4,7 @@
 // ファイルを追加・改名したときは FILES を直し、VERSION の数字を上げる。
 // キャラの絵（sprites/*.webp）は一覧 sprites/manifest.js から全部読んで保存する。
 importScripts("./sprites/manifest.js");
-const VERSION = "v8";
+const VERSION = "v9";
 const CACHE = "horihori-tensei-" + VERSION;
 const FONT_CACHE = "horihori-tensei-fonts";
 const FILES = [
@@ -16,6 +16,7 @@ const FILES = [
   "./chars.js",
   "./sprites/manifest.js",
   "./pics.js",
+  "./pit.js",
   "./sfx.js",
   "./app.js",
   "./manifest.webmanifest",

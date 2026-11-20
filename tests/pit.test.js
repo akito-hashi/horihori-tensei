@@ -46,3 +46,15 @@ test("岩肌の模様は SVG の画像で、色の指定が入っている", () 
   assert.ok(svg.includes(st.matrix));
   assert.ok(svg.includes(st.light));
 });
+
+test("星は、その地層に決めてある色（#rgb か hsl）で岩肌を作る。月は灰色、火星は赤茶", () => {
+  const m = (st) => st.matrix.split(/\s+/).map(Number);
+  const moon = m(Pit.rockStyle({ color: "#cfd3da" })), mars = m(Pit.rockStyle({ color: "#e07a4a" }));
+  assert.ok(Math.abs(moon[0] - moon[12]) < 0.08, "月はほぼ灰色");
+  assert.ok(mars[0] > mars[6] && mars[6] > mars[12], "火星は 赤 > 緑 > 青");
+  const g = m(Pit.rockStyle({ color: "hsl(120 50% 48%)" }));
+  assert.ok(g[6] > g[0] && g[6] > g[12], "hsl も読める");
+  okStyle(Pit.rockStyle({ color: "hsl(300 55% 28%)" }), "hsl");
+  assert.deepEqual(Pit.rockStyle({ color: "へんな色" }), Pit.rockStyle({ layer: "soil" }));
+  okStyle(Pit.rockStyle({ planet: 0 }), "planet 0");
+});

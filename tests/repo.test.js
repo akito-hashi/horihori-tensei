@@ -20,3 +20,9 @@ test("style.css の @keyframes の名前がかぶっていない（あとの定�
   const dup = names.filter((n, i) => names.indexOf(n) !== i);
   assert.deepEqual(dup, []);
 });
+
+test("style.css に光のにじみ（drop-shadow / 外側の光る box-shadow）が残っていない", () => {
+  const css = fs.readFileSync(path.join(ROOT, "style.css"), "utf8");
+  const bad = css.split("\n").filter((l) => /drop-shadow\(0 0 /.test(l) || /box-shadow:\s*0 0 [1-9]/.test(l));
+  assert.deepEqual(bad, []);
+});
