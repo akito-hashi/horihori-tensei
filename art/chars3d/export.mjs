@@ -14,6 +14,7 @@ const META = path.join(OUT, "_meta");
 const BLENDER = process.env.BLENDER || "/Applications/Blender.app/Contents/MacOS/Blender";
 const SAMPLES = 64, RES = 256;
 const COMPS = ["mog", "gan", "drill", "soko"];
+const UI = ["coin", "shard", "pick", "glove", "helmet", "boot", "tree", "book", "star", "nugget", "nugget-pearl"];
 
 // [名前, 引数]。自分の装備は「つるはし,手袋,ヘルメット,長ぐつ」で、描く層以外はふつうの装備にしておく
 export function jobs() {
@@ -27,6 +28,7 @@ export function jobs() {
     out.push([`me-arm-${i}`, ["player", OUT + "/", SAMPLES, RES, `1,${i},1,0`, "arm", i]]);
   }
   for (let i = 0; i < 6; i++) out.push([`me-pick-${i}`, ["player", OUT + "/", SAMPLES, RES, `${i},0,1,0`, "pick", i]]);
+  for (const n of UI) out.push([`ui-${n}`, [n, OUT + "/", 48, 128], "icons.py"]);
   return out;
 }
 
@@ -48,7 +50,9 @@ export function buildManifest(metas) {
     for (const p of st.parts) files.push(...(p.frames || [p.file]));
   }
   files.push(player.body, player.blink, ...player.boots, ...player.gloveL, ...player.helmet, ...player.arm.glove, ...player.arm.pick);
-  return { size: RES, files, comp, player };
+  const ui = Object.fromEntries(UI.map((n) => [n, by(`ui-${n}`).file]));
+  files.push(...Object.values(ui));
+  return { size: RES, files, comp, player, ui };
 }
 
 function readMetas() {
@@ -65,9 +69,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   fs.mkdirSync(META, { recursive: true });
   if (!process.argv.includes("--manifest")) {
     const list = jobs().filter(([name]) => !only || name.includes(only));
-    list.forEach(([name, args], i) => {
+    list.forEach(([name, args, script = "build.py"], i) => {
       const t = Date.now();
-      const log = execFileSync(BLENDER, ["-b", "-P", path.join(HERE, "build.py"), "--", ...args.map(String)], { encoding: "utf8", maxBuffer: 64 << 20 });
+      const log = execFileSync(BLENDER, ["-b", "-P", path.join(HERE, script), "--", ...args.map(String)], { encoding: "utf8", maxBuffer: 64 << 20 });
       if (!/DONE/.test(log) || /Traceback|Error:/.test(log)) { console.error(log.slice(-3000)); throw new Error(`${name} の書き出しに失敗`); }
       console.log(`${i + 1}/${list.length} ${name} ${((Date.now() - t) / 1000).toFixed(0)}秒`);
     });

@@ -48,7 +48,7 @@ function listed() {
     for (const p of st.parts) out.push(...(p.frames || [p.file]));
   }
   const P = S.player;
-  out.push(P.body, P.blink, ...P.boots, ...P.gloveL, ...P.helmet, ...P.arm.glove, ...P.arm.pick);
+  out.push(P.body, P.blink, ...P.boots, ...P.gloveL, ...P.helmet, ...P.arm.glove, ...P.arm.pick, ...Object.values(S.ui || {}));
   return out;
 }
 
@@ -59,5 +59,15 @@ test("files は一覧の中の全部の画像で、重なりがなく、全部 s
   for (const f of S.files) {
     assert.match(f, /^[A-Za-z0-9-]+\.webp$/, f);
     assert.ok(fs.existsSync(path.join(ROOT, "sprites", f)), `${f} がない`);
+  }
+});
+
+test("画面のアイコン 11個（お金・かけら・装備・メニュー・金塊）が一覧にあり、ファイルも実在する", () => {
+  const names = ["coin", "shard", "pick", "glove", "helmet", "boot", "tree", "book", "star", "nugget", "nugget-pearl"];
+  assert.deepEqual(Object.keys(S.ui).sort(), [...names].sort());
+  for (const n of names) {
+    assert.equal(S.ui[n], `ui-${n}.webp`);
+    assert.ok(S.files.includes(S.ui[n]), `${n} が files にない`);
+    assert.ok(fs.existsSync(path.join(ROOT, "sprites", S.ui[n])), `${n} がない`);
   }
 });
