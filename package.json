@@ -3,7 +3,10 @@
   "private": true,
   "scripts": {
     "test": "node --test --test-timeout=60000 tests/",
-    "test:ui": "node --test --test-concurrency=1 --test-timeout=60000 tests-ui/"
+    "test:ui": "node --test --test-concurrency=1 --test-timeout=60000 tests-ui/",
+    "art": "node art/chars3d/export.mjs"
   },
-  "devDependencies": { "puppeteer-core": "24.43.1" }
+  "devDependencies": {
+    "puppeteer-core": "24.43.1"
+  }
 }

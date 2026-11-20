@@ -4,7 +4,10 @@
   const D = window.GameData, E = window.Engine;
   // キャラの絵（chars.js）が読めなかったときは絵文字で代わりに出す
   const emo = (e) => () => `<svg viewBox="0 0 100 100" class="ch"><text x="50" y="72" font-size="60" text-anchor="middle">${e}</text></svg>`;
-  const C = window.Chars || { mog: emo("🐹"), gan: emo("🧔"), drill: emo("🤖"), soko: emo("👽"), player: emo("⛏️") };
+  const C0 = window.Chars || { mog: emo("🐹"), gan: emo("🧔"), drill: emo("🤖"), soko: emo("👽"), player: emo("⛏️") };
+  // 3Dの絵（sprites/manifest.js と pics.js）があればそちらを使い、なければ SVG の絵
+  const PX = window.Pics;
+  const C = PX ? { mog: (s) => PX.comp("mog", s), gan: (s) => PX.comp("gan", s), drill: (s) => PX.comp("drill", s), soko: (s) => PX.comp("soko", s), player: (g) => PX.player(g) } : C0;
   const S = window.Sfx || { play() {}, setOn() {}, isOn: () => false, unlock() {} };
   const KEY = "horihori-tensei-v1";
   const app = document.getElementById("app");

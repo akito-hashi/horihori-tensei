@@ -12,7 +12,7 @@ const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const E = require("../engine.js");
-const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".png": "image/png", ".webmanifest": "application/manifest+json" };
+const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".png": "image/png", ".webp": "image/webp", ".webmanifest": "application/manifest+json" };
 
 let browser, server, BASE;
 before(async () => {
@@ -66,6 +66,15 @@ test("一度開けば、電波がなくても開いて遊べる", async () => {
   assert.equal(await p.$eval("#app", (el) => el.dataset.screen), "title");
   await p.$eval('[data-act="new"]', (e) => e.click());
   assert.equal(await p.$eval("#app", (el) => el.dataset.screen), "dig");
+  // 3Dのキャラの絵も、電波なしで全部出る
+  const ok = await p.$$eval('#pit [data-comp="me"] .spr img', (els) => Promise.all(els.map((e) => e.decode().then(() => e.naturalWidth > 0, () => false))));
+  assert.ok(ok.length >= 7 && ok.every(Boolean), String(ok));
+  const missing = await p.evaluate(async () => {
+    const name = (await caches.keys()).find((k) => /^horihori-tensei-v\d+$/.test(k));
+    const have = new Set((await (await caches.open(name)).keys()).map((r) => new URL(r.url).pathname.slice(1)));
+    return window.Pics.files.filter((f) => !have.has(f));
+  });
+  assert.deepEqual(missing, [], "保存されていない絵がある");
   assert.deepEqual(p.errors, []);
 });
 
@@ -74,7 +83,9 @@ test("サービスワーカーが保存するファイルは、すべて実在�
   const files = [...sw.matchAll(/"\.\/([^"]*)"/g)].map((m) => m[1]).filter(Boolean);
   assert.ok(files.length >= 6);
   for (const f of files) assert.ok(fs.existsSync(path.join(ROOT, f)), f);
-  for (const f of ["index.html", "style.css", "data.js", "engine.js", "chars.js", "app.js", "sfx.js"]) assert.ok(files.includes(f), `${f} が sw.js にない`);
+  for (const f of ["index.html", "style.css", "data.js", "engine.js", "chars.js", "app.js", "sfx.js", "pics.js", "sprites/manifest.js"]) assert.ok(files.includes(f), `${f} が sw.js にない`);
+  assert.match(sw, /importScripts\("\.\/sprites\/manifest\.js"\)/, "絵の一覧を読み込んで、全部の絵を保存する");
+  assert.match(sw, /SPRITES\.files/);
 });
 
 function clearSave() {

@@ -2,7 +2,9 @@
 // アプリのファイル：ネットから最新を取り、つながらないときだけ保存済みを使う。
 // 書体（Google Fonts）：一度読み込んだものを保存して使う。
 // ファイルを追加・改名したときは FILES を直し、VERSION の数字を上げる。
-const VERSION = "v7";
+// キャラの絵（sprites/*.webp）は一覧 sprites/manifest.js から全部読んで保存する。
+importScripts("./sprites/manifest.js");
+const VERSION = "v8";
 const CACHE = "horihori-tensei-" + VERSION;
 const FONT_CACHE = "horihori-tensei-fonts";
 const FILES = [
@@ -12,13 +14,15 @@ const FILES = [
   "./data.js",
   "./engine.js",
   "./chars.js",
+  "./sprites/manifest.js",
+  "./pics.js",
   "./sfx.js",
   "./app.js",
   "./manifest.webmanifest",
   "./icons/icon-180.png",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
-];
+].concat(((self.SPRITES && self.SPRITES.files) || []).map((f) => "./sprites/" + f));
 
 function withTimeout(p, ms) {
   return new Promise((resolve, reject) => {

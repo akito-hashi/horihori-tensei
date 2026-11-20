@@ -1,2 +1,7 @@
 node_modules/
 .DS_Store
+art/*.blend
+art/*.blend1
+art/mog3d.py
+sprites/_meta/
+art/chars3d/__pycache__/

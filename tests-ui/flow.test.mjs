@@ -20,9 +20,14 @@ let browser;
 before(async () => { browser = await puppeteer.launch({ executablePath: CHROME, headless: true }); });
 after(async () => { await browser?.close(); });
 
-async function open({ save = null } = {}) {
+async function open({ save = null, reduce = false, block = null } = {}) {
   const ctx = await browser.createBrowserContext();
   const p = await ctx.newPage();
+  if (reduce) await p.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "reduce" }]);
+  if (block) {
+    await p.setRequestInterception(true);
+    p.on("request", (r) => (r.url().includes(block) ? r.abort() : r.continue()));
+  }
   await p.emulate({ viewport: { width: 375, height: 553, deviceScaleFactor: 2, isMobile: true, hasTouch: true },
     userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1" });
   p.errors = [];
@@ -173,7 +178,8 @@ test("地球の中心に着くとエンドロールが流れ、そのあとク�
   assert.match(roll, /Thank you for playing/);
   assert.match(roll, /モグ/);
   assert.match(roll, /1回目/, "人生の振り返り");
-  assert.ok(await p.$("#roll svg"), "仲間の絵");
+  assert.ok(await p.$("#roll .spr"), "仲間の絵");
+  assert.ok(await p.$("#roll .cr-me .spr"), "自分の絵");
   assert.ok(await fits(p));
   await click(p, '[data-act="skip-credits"]');
   assert.equal(await screen(p), "clear");
@@ -314,8 +320,8 @@ test("転生画面のかけらの数は、掘り進むと増えていく。記�
 test("仲間は穴の横で掘っている。まだの仲間は出ない。強化で Lv が上がり、Lv.10 で変身する", async () => {
   const p = await open({ save: mk((g) => { g.life.money = 1e6; g.life.lv.mog = 9; }) });
   await click(p, '[data-act="continue"]');
-  assert.ok(await p.$('#pit [data-comp="mog"] svg'), "モグの絵");
-  assert.ok(await p.$('#pit [data-comp="me"] svg'), "自分の絵");
+  assert.ok(await p.$('#pit [data-comp="mog"] .spr'), "モグの絵");
+  assert.ok(await p.$('#pit [data-comp="me"] .spr'), "自分の絵");
   assert.equal(await p.$('#pit [data-comp="gan"]'), null, "ガンさんはまだ");
   assert.equal(await p.$eval('#pit [data-comp="mog"]', (e) => e.dataset.stage), "0");
   await click(p, '[data-lvup="mog"]');
@@ -596,4 +602,86 @@ test("エンドロールはタップすると、とちゅうから 4倍速にな
   assert.ok(Math.abs(y1 - y0) < 40, `飛ばない ${y0} → ${y1}`);
   assert.equal(await p.$eval(".rollin", (e) => e.getAnimations()[0].playbackRate), 4);
   assert.equal(await screen(p), "credits");
+});
+
+// ===== 3Dのキャラの絵 =====
+const allCrew = () => mk((g) => { g.life.money = 1e6; g.life.lv = { mog: 120, gan: 30, drill: 12, soko: 3 }; g.life.gear = { pick: 5, glove: 2, helmet: 3, boots: 1 }; });
+const imgsLoaded = (p, sel) => p.$$eval(sel, (els) => Promise.all(els.map((e) => e.decode().then(() => e.naturalWidth > 0, () => false))));
+
+test("穴の中の自分と仲間 4人は 3Dの絵で、全部の画像が読み込めている", async () => {
+  const p = await open({ save: allCrew() });
+  await click(p, '[data-act="continue"]');
+  for (const id of ["me", "mog", "gan", "drill", "soko"]) assert.ok(await p.$(`#pit [data-comp="${id}"] .spr`), id);
+  assert.ok(await p.$('#pit [data-comp="mog"] .spr.s-4'), "Lv.120 のモグは最後の段階");
+  assert.ok(await p.$('#pit [data-comp="me"] .spr.star'), "流れ星のつるはし");
+  const ok = await imgsLoaded(p, "#pit .spr img");
+  assert.ok(ok.length > 20, String(ok.length));
+  assert.ok(ok.every(Boolean), "読み込めない画像がある");
+  assert.equal(await p.$('#pit svg.ch'), null, "SVG の絵は使わない");
+  assert.ok(await fits(p));
+  assert.deepEqual(p.errors, []);
+});
+
+test("仲間カードとエンドロールも 3Dの絵", async () => {
+  const p = await open({ save: allCrew() });
+  await click(p, '[data-act="continue"]');
+  assert.ok(await p.$('.cc[data-card="mog"] .pic .spr'));
+  const ok = await imgsLoaded(p, ".cc .pic .spr img");
+  assert.ok(ok.length > 0 && ok.every(Boolean));
+});
+
+test("ドリルンのターボ中は、ドリルの刃が速く回る", async () => {
+  const dur = async (t) => {
+    const s = allCrew(); s.game.life.skills.drill_a = true; s.game.life.t = t; // ターボは 30秒ごとの最後の 5秒
+    const p = await open({ save: s });
+    await click(p, '[data-act="continue"]');
+    await wait(150);
+    return p.$eval('#pit [data-comp="drill"] .p-drill .fr', (e) => [e.closest(".tun").classList.contains("turbo"), parseFloat(getComputedStyle(e).animationDuration)]);
+  };
+  const [offT, slow] = await dur(1);
+  const [onT, fast] = await dur(26);
+  assert.deepEqual([offT, onT], [false, true]);
+  assert.ok(slow > 0 && fast > 0 && fast < slow, `${slow} → ${fast}`);
+});
+
+test("動きを減らす設定では、部品が動かず、まばたきも出ない", async () => {
+  const p = await open({ save: allCrew(), reduce: true });
+  await click(p, '[data-act="continue"]');
+  const st = await p.evaluate(() => {
+    const cs = (sel) => getComputedStyle(document.querySelector(sel));
+    return { arm: cs('#pit [data-comp="gan"] .p-arm').animationName, blink: cs('#pit [data-comp="mog"] .blink').opacity, fr: cs('#pit [data-comp="drill"] .fr').animationName };
+  });
+  assert.deepEqual(st, { arm: "none", blink: "0", fr: "none" });
+});
+
+test("一覧（sprites/manifest.js）が読み込めないときは、今までの絵で遊べる", async () => {
+  const p = await open({ save: allCrew(), block: "sprites/manifest.js" });
+  await click(p, '[data-act="continue"]');
+  assert.ok(await p.$('#pit [data-comp="mog"] svg'), "モグの絵（SVG）");
+  assert.ok(await p.$('#pit [data-comp="me"] svg'), "自分の絵（SVG）");
+  assert.equal(await p.$("#pit .spr"), null);
+  await tapPit(p, 3);
+  assert.deepEqual(p.errors, []);
+});
+
+test("変身の演出は、くるっと 1回まわって終わる（最後に逆まわりしない）", async () => {
+  const p = await open({ save: mk((g) => { g.life.money = 1e6; g.life.lv.mog = 9; }) });
+  await click(p, '[data-act="continue"]');
+  await click(p, '[data-lvup="mog"]');
+  const m11 = await p.$eval('#pit [data-comp="mog"] .who', (el) => {
+    const an = el.getAnimations().find((a) => a.animationName === "transform3d");
+    if (!an) return null;
+    an.pause();
+    return [760, 800, 850, 900, 950, 990].map((t) => { an.currentTime = t; return +new DOMMatrix(getComputedStyle(el).transform).m11.toFixed(2); });
+  });
+  assert.ok(m11 && m11.every((v) => v > 0.85), `終わりぎわの向き ${m11}`);
+});
+
+test("自分はタップで振ったあとも、また呼吸の動きにもどる", async () => {
+  const p = await open({ save: mk() });
+  await click(p, '[data-act="continue"]');
+  await tapPit(p, 1);
+  await wait(700);
+  const an = await p.$eval('#pit [data-comp="me"] .sb', (e) => e.getAnimations().map((a) => `${a.animationName}:${a.playState}`));
+  assert.ok(an.includes("breathe:running"), String(an));
 });
