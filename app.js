@@ -8,6 +8,9 @@
   // 3Dの絵（sprites/manifest.js と pics.js）があればそちらを使い、なければ SVG の絵
   const PX = window.Pics;
   const C = PX ? { mog: (s) => PX.comp("mog", s), gan: (s) => PX.comp("gan", s), drill: (s) => PX.comp("drill", s), soko: (s) => PX.comp("soko", s), player: (g) => PX.player(g) } : C0;
+  // 画面のアイコン（3D の絵）。一覧が読めないときは絵文字
+  const UI_EMO = { coin: "💰", shard: "✦", pick: "⛏️", glove: "🧤", helmet: "⛑️", boot: "👢", tree: "🌳", book: "📖", star: "✨" };
+  const UI = (n, cls = "ico") => (window.SPRITES && SPRITES.ui && SPRITES.ui[n] ? `<img class="${cls}" src="sprites/${SPRITES.ui[n]}" alt="">` : UI_EMO[n] || "");
   const S = window.Sfx || { play() {}, setOn() {}, isOn: () => false, unlock() {} };
   const KEY = "horihori-tensei-v1";
   const app = document.getElementById("app");
@@ -100,8 +103,8 @@
     if (ui.view === "credits") { const r = $(".rollin"); if (r) r.addEventListener("animationend", () => { if (ui.view === "credits") go(ui.afterCredits || "clear"); }); }
     running();
   }
-  const navHtml = () => `<nav class="nav">${[["dig", "⛏️", "掘る"], ["tree", "🌳", "ツリー"], ["book", "📖", "図鑑"], ...(game.cleared ? [["sky", "🌌", "星空"]] : []), ["rebirth", "✨", "転生"]]
-    .map(([v, i, l]) => `<button data-nav="${v}" ${ui.view === v ? 'aria-current="page"' : ""}><i aria-hidden="true">${i}</i>${l}${v === "tree" && affordableNode() ? '<span class="dot" aria-label="開放できるマスあり"></span>' : ""}</button>`).join("")}</nav>`;
+  const navHtml = () => `<nav class="nav">${[["dig", "pick", "掘る"], ["tree", "tree", "ツリー"], ["book", "book", "図鑑"], ...(game.cleared ? [["sky", "shard", "星空"]] : []), ["rebirth", "star", "転生"]]
+    .map(([v, i, l]) => `<button data-nav="${v}" ${ui.view === v ? 'aria-current="page"' : ""}><i aria-hidden="true">${UI(i)}</i>${l}${v === "tree" && affordableNode() ? '<span class="dot" aria-label="開放できるマスあり"></span>' : ""}</button>`).join("")}</nav>`;
 
   const where = () => (game.life.space ? `${E.planet(game.life.planet).icon} ${E.planet(game.life.planet).name} ${M(game.life.depth)}` : M(game.life.depth));
   const PIC2 = () => ({ mog: C.mog(3), gan: C.gan(3), drill: C.drill(3), soko: C.soko(3) });
@@ -112,7 +115,7 @@
       const L = game && game.life;
       return `<div class="screen">
         <div class="logo"><h1 class="big hot">ほりほり<br>転生</h1><div class="s">めざせ 地球の中心 6,371km</div></div>
-        <div class="titlepick" aria-hidden="true">⛏️</div>
+        <div class="titlecrew" aria-hidden="true"${window.Pit ? ` style="background-image:url(&quot;${Pit.rockTile(Pit.rockStyle({ layer: "soil" }))}&quot;)"` : ""}>${CAVE}<div class="tc s1">${C.gan(1)}</div><div class="tc s2">${C.mog(1)}</div><div class="tc s3">${C.player(L ? L.gear : { pick: 1, glove: 0, helmet: 1, boots: 0 })}</div><div class="tc s4">${C.soko(2)}</div><div class="tc s5">${C.drill(1)}</div></div>
         <div class="center sub" style="opacity:.95">掘って、転生して、もっと深く。</div>
         ${ui.note ? `<div class="center sub" style="opacity:1;color:#fff6c4">${ui.note}</div>` : ""}
         <div class="grow"></div>
@@ -126,10 +129,10 @@
       const L = game.life;
       const marks = L.space ? "" : D.LAYERS.filter((l) => l.wall).map((l) => `<span class="w ${game.tree[l.wall] ? "ok" : ""}" style="left:${(gaugePos(l.from) * 100).toFixed(1)}%"></span>`).join("");
       return `<header class="hud">
-          <div class="top"><span id="where">${game.lifeNo}回目の人生${L.space ? ` ・ ${E.planet(L.planet).icon} ${E.planet(L.planet).name}` : ""}</span><span class="sh">✦ <b class="num" id="shards">${N(game.shards)}</b>
+          <div class="top"><span id="where">${game.lifeNo}回目の人生${L.space ? ` ・ ${E.planet(L.planet).icon} ${E.planet(L.planet).name}` : ""}</span><span class="sh">${UI("shard")}<b class="num" id="shards">${N(game.shards)}</b>
             <button data-act="sound" class="snd" aria-label="効果音のオンオフ">${S.isOn() ? "🔊" : "🔇"}</button></span></div>
           <div id="depth" class="depth num">${M(L.depth)}</div>
-          <div class="row2"><span>💰 <b class="num" id="money">${N(L.money)}</b></span><span id="speed"></span></div>
+          <div class="row2"><span>${UI("coin")}<b class="num" id="money">${N(L.money)}</b></span><span id="speed"></span></div>
           <div class="hudrow"><span class="layerchip" id="layerchip"></span><div class="gauge" aria-hidden="true"><i id="gdot"></i>${marks}<b id="gicon">${L.space ? E.planet(L.planet).bossIcon : "💎"}</b></div></div>
           <div id="boostslot"></div>
         </header>
@@ -306,15 +309,15 @@
       <div class="info"><b>${c.name} <span class="num">Lv.${n}</span></b>
         <small>${n ? `毎秒 +<span data-ps="${c.id}">${perSec(each)}</span>` : `${c.kind}・仲間にすると 毎秒 +${perSec(each)}`}${ms.next ? ` ・ あと${ms.next - n}で${ms.transform ? "変身！" : "パワー×2"}` : ""}</small>
         <div class="bar"><i style="width:${pct}%"></i></div><div class="sks">${sks}</div></div>
-      <button class="cost num" data-lvup="${c.id}" data-price="${cost}">${N(cost)} 💰<i>${n ? "強化" : "仲間にする"}</i></button></div>`;
+      <button class="cost num" data-lvup="${c.id}" data-price="${cost}">${N(cost)} ${UI("coin", "ico s")}<i>${n ? "強化" : "仲間にする"}</i></button></div>`;
   }
   function gearRow(line) {
     const g = D.GEAR[line], have = meGear()[line], cost = E.gearCost(game, line);
     const pips = g.tiers.map((_, k) => `<i class="${k < have ? "on" : ""}"></i>`).join("");
     const next = g.tiers[have];
-    return `<div class="gr"><span class="ic" aria-hidden="true">${g.icon}</span><div class="info"><b>${g.name}<span class="pips">${pips}</span></b>
+    return `<div class="gr"><span class="ic" aria-hidden="true">${UI({ pick: "pick", glove: "glove", helmet: "helmet", boots: "boot" }[line]) || g.icon}</span><div class="info"><b>${g.name}<span class="pips">${pips}</span></b>
       <small>${next ? `次：${next.name}（${next.desc}）` : "最高の段階！"}</small></div>
-      ${cost == null ? `<span class="cost done">最大</span>` : `<button class="cost num" data-gear="${line}" data-price="${cost}">${N(cost)} 💰<i>強化</i></button>`}</div>`;
+      ${cost == null ? `<span class="cost done">最大</span>` : `<button class="cost num" data-gear="${line}" data-price="${cost}">${N(cost)} ${UI("coin", "ico s")}<i>強化</i></button>`}</div>`;
   }
   function shopSig() {
     const L = game.life;

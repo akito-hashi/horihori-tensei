@@ -371,3 +371,51 @@ nav.nav .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50
 /* まとめて強化の切りかえ */
 .tabs .buyn { display: flex; gap: 2px; flex: none; }
 .tabs .buyn button { flex: none; padding: 6px 7px; font-size: 11px; }
+
+/* ===== 落ち着いた坑道：全画面の色と部品（光のにじみ・金のふち・金属のつやはなし） ===== */
+:root { --gold: #e8a23a; --gold2: #e8a23a; --money: #f0b44c; --bg: #1e1915; --panel: #2a231e; --line: #3a312a; --text: #f2ebe3; --sub: #a8998a; --soul: #cfd8e8; }
+body { background: var(--bg); color: var(--text); }
+.btn { background: var(--gold); color: #2a1a0a; box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .2); }
+.btn:active:not(:disabled) { transform: translateY(2px); box-shadow: none; }
+.btn.dark { background: #2e2722; color: var(--text); }
+.glass { background: var(--panel); border: 1px solid var(--line); }
+.chip { background: rgba(20, 14, 10, .7); }
+.hud { background: #26201b; border-bottom: 1px solid var(--line); }
+.hud .row2 b { color: var(--money); }
+.hud .depth { color: #fff; text-shadow: 0 2px 0 rgba(0, 0, 0, .5); }
+.tabs button { background: #2e2722; color: var(--sub); }
+.tabs button[aria-pressed="true"] { background: var(--gold); color: #2a1a0a; }
+.cc, .gr, .it { background: var(--panel); border: 1px solid var(--line); box-shadow: none; }
+.cc .cost, .gr .cost, .it .cost { background: var(--gold); color: #2a1a0a; box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .2); }
+.cc .cost.poor, .gr .cost.poor { background: #2e2722; color: var(--sub); box-shadow: none; }
+.cc .bar i { background: var(--gold); }
+.nav { background: #1a1512; border-top: 1px solid var(--line); }
+.nav button { color: var(--sub); }
+.nav button[aria-current="page"] { color: var(--text); }
+.nav button:not([aria-current="page"]) img { filter: grayscale(.4); opacity: .75; }
+.ico { width: 1.5em; height: 1.5em; margin: -.35em -.1em; vertical-align: middle; object-fit: contain; }
+.ico.s { width: 1.3em; height: 1.3em; }
+.nav button i .ico { width: 34px; height: 34px; margin: -6px 0 -4px; }
+.gr .ic .ico { width: 40px; height: 40px; margin: 0; }
+.float { color: #fff; text-shadow: 0 2px 0 #000, 0 0 2px #000; }
+.float.crit { color: var(--gold); }
+.float.combo { color: #f2d6b8; }
+.toast { background: rgba(20, 14, 10, .85); border-color: var(--line); }
+.toast b { color: var(--money); }
+#boost, #boost.rainbow { background: var(--gold); color: #2a1a0a; box-shadow: none; }
+#banner .s { color: var(--gold); }
+.node.on { background: var(--gold); border-color: #f2ebe3; box-shadow: none; }
+.node.can { box-shadow: none; }
+.shardnum { color: var(--soul); text-shadow: none; }
+/* 画面ごとの背景はこげ茶の無地にそろえる（星空と転生は少しだけ色を残す） */
+.titlebg, .treebg, .bookbg, .corebg { background: var(--bg); }
+.soulbg { background: linear-gradient(180deg, #24203a, var(--bg)); }
+.skybg { background: linear-gradient(180deg, #161a2e, var(--bg)); }
+/* タイトル：岩の部屋に 5人が並ぶ */
+.logo .big { color: #fff; text-shadow: 0 4px 0 #000; }
+.logo .s { color: var(--sub); }
+.titlecrew { position: relative; flex: none; height: 34vh; max-height: 210px; margin: 2vh -14px 0; container-type: size; background-size: 256px 256px; }
+.titlecrew .tc { position: absolute; --s: min(23cqw, 46cqh); width: var(--s); height: var(--s); left: calc(var(--x) - var(--s) / 2); top: calc(79.4cqh - var(--s) * .79); }
+.titlecrew .tc.s3 { --s: min(33cqw, 62cqh); }
+.titlecrew .s1 { --x: 9cqw; } .titlecrew .s2 { --x: 29.5cqw; } .titlecrew .s3 { --x: 50cqw; } .titlecrew .s4 { --x: 70.5cqw; } .titlecrew .s5 { --x: 91cqw; }
+.titlecrew .spr .p-drill { transform: rotate(52deg); }

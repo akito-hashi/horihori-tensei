@@ -757,3 +757,48 @@ test("動きを減らす設定では、タップしても土のかけらが飛�
   await tapPit(p, 5);
   assert.equal(await p.$$eval("#dirtbox > *", (e) => e.length), 0);
 });
+
+// ===== 落ち着いた坑道（全画面） =====
+test("下のメニュー・上の帯のお金とかけら・自分タブの装備は、3Dのアイコン画像", async () => {
+  const p = await open({ save: allCrew() });
+  await click(p, '[data-act="continue"]');
+  const nav = await p.$$eval("nav.nav button", (bs) => bs.map((b) => !!b.querySelector("img[src*='sprites/ui-']")));
+  assert.ok(nav.length >= 4 && nav.every(Boolean), String(nav));
+  assert.ok(await p.$(".hud img[src$='ui-coin.webp']"), "お金");
+  assert.ok(await p.$(".hud img[src$='ui-shard.webp']"), "星のかけら");
+  await click(p, '[data-tab="me"]');
+  for (const n of ["pick", "glove", "helmet", "boot"]) assert.ok(await p.$(`#shop img[src$='ui-${n}.webp']`), n);
+  const ok = await p.$$eval("img[src*='sprites/ui-']", (els) => Promise.all(els.map((e) => e.decode().then(() => e.naturalWidth > 0, () => false))));
+  assert.ok(ok.every(Boolean));
+});
+
+test("タイトル画面には 5人が並び、はみ出さない", async () => {
+  const p = await open({ save: allCrew() });
+  assert.equal(await p.$$eval("#app .titlecrew .spr", (e) => e.length), 5);
+  assert.ok(await fits(p));
+});
+
+test("色は落ち着いた坑道（こげ茶の背景・琥珀色のボタン）で、光のにじみがない", async () => {
+  const p = await open({ save: allCrew() });
+  await click(p, '[data-act="continue"]');
+  const st = await p.evaluate(() => {
+    const cs = (sel) => getComputedStyle(document.querySelector(sel));
+    return { bg: getComputedStyle(document.body).backgroundColor, buy: cs("[data-lvup]:not(.poor)").backgroundColor, depthShadow: cs("#depth").textShadow, gdot: cs("#gdot").boxShadow };
+  });
+  assert.equal(st.bg, "rgb(30, 25, 21)");
+  assert.equal(st.buy, "rgb(232, 162, 58)");
+  assert.equal(st.gdot, "none");
+  assert.doesNotMatch(st.depthShadow, /\d+px \d+px (1[0-9]|[2-9]\d)px/, "大きなにじみがない");
+});
+
+test("ツリー・図鑑・転生・記録・星空の画面もはみ出さない", async () => {
+  const s = allCrew(); s.game.cleared = true; s.game.clears = [{ lifeNo: 1, totalTime: 100, lifeTime: 100 }];
+  const p = await open({ save: s });
+  await click(p, '[data-act="continue"]');
+  for (const v of ["tree", "book", "sky", "rebirth"]) {
+    await click(p, `[data-nav="${v}"]`);
+    assert.ok(await fits(p), v);
+  }
+  await click(p, '[data-act="records"]');
+  assert.ok(await fits(p), "records");
+});
